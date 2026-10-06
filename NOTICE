@@ -1,0 +1,24 @@
+bstore-bridge
+Copyright 2026 Lightweb Inc. (https://lightweb.net)
+
+=========================================================================
+
+bstore-bridge joins an existing UHRP host to the bstore storage market
+without changing how that host runs. It is bstore's provider run as a
+market front over a backend that speaks the incumbent's published HTTP
+interfaces (BRC-167 upload sessions and object routes, BRC-104 and
+BRC-105, its own renewal route and BRC-26 advertisements) and imports
+none of the incumbent's code. Bounties pay the incumbent's own key.
+
+=========================================================================
+Third-Party Standards
+
+  BRC-26:  Universal Hash Resolution Protocol
+  BRC-29:  Simple Authenticated BSV P2PKH Payment Protocol
+  BRC-103: Peer-to-Peer Mutual Authentication and Certificate Exchange Protocol
+  BRC-104: HTTP Transport for BRC-103 Mutual Authentication
+  BRC-105: HTTP Service Monetization Framework
+  BRC-167: Chunked, Hashed, Interleaved Resolution Protocol (CHIRP)
+
+Third-party software is listed, with its licence text, in
+LICENSE-THIRD-PARTY.

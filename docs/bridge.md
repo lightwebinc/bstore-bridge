@@ -290,7 +290,10 @@ and the statements are looked for again every `statement_check_seconds`
 - A transient incumbent outage answers challenges `503`; a 404 marks the
   root damaged for good.
 - Settlements are forwarded, not taken: the incumbent's operator claims
-  them with `claim`.
+  them with `claim`. A writer's `bstore settle` and `bstore due` list the
+  incumbent's share as forwarded by this front and do not count it as
+  owed; once the incumbent's wallet spends the output, the writer's node
+  shows it and the payee is done. A claim alone changes nothing on chain.
 - In a writer's settlement race the incumbent's own derived front is asked
   first; an unchanged incumbent does not answer it, so that draw is spent
   (frozen.md row C29) and the bridge answers the second. The bridge has one
@@ -300,6 +303,24 @@ and the statements are looked for again every `statement_check_seconds`
 - With Range ignored or wrong, challenges are priced per sample as on a
   native provider while each sample may cost a 4 MiB read: an operator in
   front of such an incumbent raises `terms.challenge_per_sample`.
+
+## Docker
+
+```console
+$ make docker-build    # ghcr.io/lightwebinc/bstore-bridge:<version> and :latest
+$ make docker-smoke    # version, help, init in a named volume, a bad config refused
+$ docker run --rm -v bridge-data:/var/lib/bstore-bridge ghcr.io/lightwebinc/bstore-bridge init -data /var/lib/bstore-bridge
+$ docker run -d --name bstore-bridge -p 127.0.0.1:8096:8096 \
+    -v bridge-data:/var/lib/bstore-bridge -v ./bridge.json:/etc/bstore-bridge/bridge.json:ro \
+    ghcr.io/lightwebinc/bstore-bridge run -config /etc/bstore-bridge/bridge.json
+```
+
+The image carries the bridge alone, its data directory
+(`/var/lib/bstore-bridge`, owned by the image's nonroot user) and the
+licences. With `listen` at `0.0.0.0:8096` in the configuration, put a TLS
+proxy in front as above (or set `tls_cert` and `tls_key`). `claim` belongs
+where the incumbent's key is, never in the bridge's container. The image is
+not published yet: build it from a checkout.
 
 ## Testing
 

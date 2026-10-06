@@ -16,11 +16,13 @@ export GOPROXY := file://$(CURDIR)/third_party/goproxy,https://proxy.golang.org,
 export GONOPROXY := none
 export GONOSUMDB := $(BSTORE)
 
-.PHONY: verify test vet fmt-check deps-check bstore-module bstore-bridge e2e
+.PHONY: verify test vet fmt-check deps-check licences licences-update bstore-module bstore-bridge e2e docker-build docker-smoke
 
 NODE ?= node
+IMAGE ?= ghcr.io/lightwebinc/bstore-bridge
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
-verify: fmt-check vet deps-check test
+verify: fmt-check vet deps-check licences test
 
 test:
 	GOWORK=off go test -race -count=1 ./...
@@ -67,7 +69,16 @@ bstore-module:
 	echo "bstore-module: $$v in $$dst"
 
 bstore-bridge:
-	GOWORK=off go build -o bin/bstore-bridge ./cmd/bstore-bridge
+	GOWORK=off go build -ldflags "-X main.version=$(VERSION)" -o bin/bstore-bridge ./cmd/bstore-bridge
+
+# LICENSE-THIRD-PARTY is generated from what the binary links: every
+# module's licence text travels with a binary or an image built here.
+# licences fails when the file is stale.
+licences:
+	GOWORK=off python3 scripts/gen-third-party-licenses.py . --check
+
+licences-update:
+	GOWORK=off python3 scripts/gen-third-party-licenses.py .
 
 # The bridge end to end (docs/bridge.md): a reference overlay host loading
 # bstore's host module bundle, over MySQL (Docker), on a local test chain,
@@ -83,3 +94,24 @@ e2e:
 	BSTORE_BRIDGE_E2E_REFHOST=$(abspath $(REFERENCE_HOST)) BSTORE_BRIDGE_E2E_MODULE=$(abspath $(BSTORE_MODULE)) \
 		BSTORE_BRIDGE_E2E_NODE=$(abspath $(shell command -v $(NODE))) \
 		GOWORK=off go test -count=1 -timeout 45m -run '^TestBridgeE2E$$' -v ./cmd/bstore-bridge/
+
+# The image, built and tagged locally as $(VERSION) and latest. Nothing
+# here pushes.
+docker-build:
+	docker build --build-arg VERSION=$(VERSION) -t $(IMAGE):$(VERSION) -t $(IMAGE):latest .
+	@docker image ls --format '{{.Repository}}:{{.Tag}}  {{.Size}}' | grep -E '^$(IMAGE):$(VERSION) '
+
+# The image with no network at all: the stamped version, help, a first
+# run in a fresh named volume mounted where the documentation says, and a
+# configuration with an unknown key refused.
+docker-smoke: docker-build
+	@set -eu; img=$(IMAGE):$(VERSION); id=bstore-bridge-smoke-$$$$; \
+	docker volume create $$id >/dev/null; trap 'docker volume rm -f $$id >/dev/null' EXIT; \
+	echo "== version"; out=$$(docker run --rm --network none $$img version); echo "$$out"; \
+	[ "$$out" = "bstore-bridge $(VERSION)" ] || { echo "docker-smoke: want bstore-bridge $(VERSION)"; exit 1; }; \
+	echo "== help"; docker run --rm --network none $$img -h | head -1; \
+	echo "== init in a named volume"; docker run --rm --network none -v $$id:/var/lib/bstore-bridge $$img init -data /var/lib/bstore-bridge | grep '^identity '; \
+	echo "== a configuration with an unknown key is refused"; \
+	rc=0; out=$$(printf '{"nope":1}' | docker run --rm -i --network none $$img run -config /dev/stdin 2>&1) || rc=$$?; echo "$$out"; \
+	[ "$$rc" = 2 ] || { echo "docker-smoke: want exit 2, got $$rc"; exit 1; }; \
+	echo "docker-smoke: ok ($$img)"

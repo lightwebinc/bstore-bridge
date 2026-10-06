@@ -12,6 +12,7 @@
 //	bstore-bridge payouts -config FILE    the settlements forwarded for the incumbent
 //	bstore-bridge claim -remittances FILE -key-file F
 //	                                      the incumbent's operator: which forwarded outputs pay its key
+//	bstore-bridge version                 print the version
 package main
 
 import (
@@ -45,6 +46,9 @@ func main() {
 
 type usageError struct{ error }
 
+// version is stamped by the build; "dev" otherwise.
+var version = "dev"
+
 const usage = `usage: bstore-bridge <command> [flags]
 
 commands:
@@ -60,11 +64,23 @@ commands:
                                  the incumbent's operator, where its key is, with a copy of the bridge's
                                  remittances.jsonl: print, for each forwarded output that pays the key
                                  in F (64 hex digits or WIF, a file of mode 0600), what a BRC-100 wallet's
-                                 internalizeAction takes; the key is read, used and forgotten`
+                                 internalizeAction takes; the key is read, used and forgotten
+  version                        print the version
+
+docs/bridge.md is the operator's guide: what the incumbent must serve, the
+configuration, operating and the limits.`
 
 func run(args []string) error {
 	if len(args) == 0 {
 		return usageError{errors.New(usage)}
+	}
+	switch args[0] {
+	case "-h", "-help", "--help", "help":
+		fmt.Println(usage)
+		return nil
+	case "version", "-version", "--version":
+		fmt.Println("bstore-bridge", version)
+		return nil
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -77,6 +93,9 @@ func run(args []string) error {
 	keyFile := fs.String("key-file", "", "the incumbent's private key (claim)")
 	remPath := fs.String("remittances", "", "a copy of the bridge's remittances.jsonl (claim)")
 	if err := fs.Parse(args[1:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
 		return usageError{err}
 	}
 	switch args[0] {

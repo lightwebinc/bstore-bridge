@@ -37,6 +37,9 @@ jobs:
       # v1.5.2.
       - name: dependency set
         run: make deps-check
+      # LICENSE-THIRD-PARTY matches what the binaries link.
+      - name: third-party licences
+        run: make licences
       # Unit tests: the bridge backend against the stand-in incumbent on a
       # local test chain, in process; nothing leaves the runner.
       - name: test
