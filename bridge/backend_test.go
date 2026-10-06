@@ -463,6 +463,22 @@ func TestBackendNeverPaysTwice(t *testing.T) {
 	}
 }
 
+// An incumbent that forgot the client's session (idle, or restarted) is
+// answered with a fresh handshake: the next call goes through.
+func TestClientHandshakesAgainAfterAForgottenSession(t *testing.T) {
+	r := newRig(t)
+	c := &uhrp.Client{Base: r.fake.Base, HTTP: r.client, Purse: r.purse, Identity: r.fake.Identity()}
+	if _, err := c.Open(r.ctx, 60, 1); err != nil {
+		t.Fatalf("first session: %v", err)
+	}
+	if err := r.fake.ForgetSessions(r.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Open(r.ctx, 60, 1); err != nil {
+		t.Fatalf("after the incumbent forgot the session: %v", err)
+	}
+}
+
 func TestClientRefusesUnauthenticatedAnswers(t *testing.T) {
 	r := newRig(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

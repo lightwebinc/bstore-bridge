@@ -143,20 +143,35 @@ func (c *Client) do(ctx context.Context, method, u string, headers map[string]st
 	if c.broken {
 		return nil, ErrUnauthenticated
 	}
-	if c.af == nil {
-		c.paying = &swapPurse{}
-		c.af = authhttp.New(c.paying, authhttp.WithoutLogging(), authhttp.WithHttpClient(c.client()))
-	}
-	c.paying.Purse = pu
 	out := &Call{}
-	res, err := c.af.Fetch(ctx, u, &authhttp.SimplifiedFetchRequestOptions{Method: method, Headers: headers, Body: body})
-	// A payment sent may reach the incumbent, which may broadcast it
-	// whatever it answered: it is counted as paid, never refunded.
-	if tx := pu.Settle(); tx != nil {
-		out.Payment = tx
-		if len(tx.Outputs) > 0 {
-			out.Paid = tx.Outputs[0].Satoshis
+	var res *http.Response
+	var err error
+	for attempt := 0; ; attempt++ {
+		if c.af == nil {
+			c.paying = &swapPurse{}
+			c.af = authhttp.New(c.paying, authhttp.WithoutLogging(), authhttp.WithHttpClient(c.client()))
 		}
+		c.paying.Purse = pu
+		res, err = c.af.Fetch(ctx, u, &authhttp.SimplifiedFetchRequestOptions{Method: method, Headers: headers, Body: body})
+		// A payment sent may reach the incumbent, which may broadcast it
+		// whatever it answered: it is counted as paid, never refunded.
+		if tx := pu.Settle(); tx != nil {
+			out.Payment = tx
+			if len(tx.Outputs) > 0 {
+				out.Paid = tx.Outputs[0].Satoshis
+			}
+		}
+		if err == nil || !staleSession(err) {
+			break
+		}
+		// The incumbent no longer knows the session (it forgot it idle,
+		// or restarted): the next call handshakes afresh. Asked again at
+		// once only when nothing was paid.
+		c.af = nil
+		if attempt > 0 || out.Payment != nil {
+			break
+		}
+		pu = c.Purse(maxPay)
 	}
 	if err != nil {
 		if errors.Is(err, purse.ErrOverMaxPay) || strings.Contains(err.Error(), "satoshis asked") {
@@ -186,6 +201,12 @@ func (c *Client) do(ctx context.Context, method, u string, headers map[string]st
 		return out, fmt.Errorf("uhrp: an answer over %d bytes", maxJSON)
 	}
 	return out, nil
+}
+
+// staleSession reports a call the incumbent answered outside the session
+// the client holds: an unsigned refusal of a session it no longer knows.
+func staleSession(err error) bool {
+	return strings.Contains(err.Error(), "server failed to authenticate")
 }
 
 func (c *Client) isVerified() bool {

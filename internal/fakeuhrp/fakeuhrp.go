@@ -131,6 +131,20 @@ func (s *Server) SetRange(m RangeMode) {
 	s.mu.Unlock()
 }
 
+// ForgetSessions forgets every BRC-104 session, as a host that restarted
+// or let them idle out does.
+func (s *Server) ForgetSessions(ctx context.Context) error {
+	a, err := auth104.New(ctx, auth104.Config{Wallet: s.W, Handshakes: auth104.Budget{Rate: 1000, Burst: 1000},
+		PerAddress: auth104.Budget{Rate: 1000, Burst: 1000}, Responses: auth104.Budget{Rate: 1000, Burst: 1000}})
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.auth = a
+	s.mu.Unlock()
+	return nil
+}
+
 // Drop makes an object gone: every route answers 404 for it, as a host
 // whose file was deleted does.
 func (s *Server) Drop(h [32]byte) {
@@ -169,17 +183,20 @@ func (s *Server) Stored(h [32]byte) bool {
 // ServeHTTP is the stand-in's routes.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Path
+	s.mu.Lock()
+	auth := s.auth
+	s.mu.Unlock()
 	switch {
 	case p == "/.well-known/auth":
-		s.auth.Handshake(w, r)
+		auth.Handshake(w, r)
 	case strings.HasPrefix(p, "/chirp/v1/uploads"):
-		s.auth.Serve(w, r, 5<<20, s.uploads)
+		auth.Serve(w, r, 5<<20, s.uploads)
 	case strings.HasPrefix(p, "/chirp/v1/") && (r.Method == http.MethodGet || r.Method == http.MethodHead):
 		s.object(w, r)
 	case p == "/renew" && r.Method == http.MethodPost:
-		s.auth.Serve(w, r, 256<<10, s.renew)
+		auth.Serve(w, r, 256<<10, s.renew)
 	default:
-		s.auth.Serve(w, r, 256<<10, func(context.Context, *http.Request, []byte, *auth104.Caller) auth104.Reply {
+		auth.Serve(w, r, 256<<10, func(context.Context, *http.Request, []byte, *auth104.Caller) auth104.Reply {
 			return auth104.Error(http.StatusNotFound, "ERR_ROUTE_NOT_FOUND", "Route not found.")
 		})
 	}
