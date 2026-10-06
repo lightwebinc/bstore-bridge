@@ -174,9 +174,11 @@ func TestBridgeE2E(t *testing.T) {
 	// A native provider, and the bridge.
 	pa := e.provider("a", portA, bucket)
 	e.run(e.pbin, "fund", "-config", pa.config, "-blocks", "104")
+	arcadeAfterFund(e.t, pa.config, e.cs.URL)
 	pa.start(e, pa.direct+"/healthz")
 	br := e.bridge(portB, bucket, inc.Base, incKey, lookSrv.URL)
 	e.run(e.bbin, "fund", "-config", br.config, "-blocks", "104")
+	arcadeAfterFund(e.t, br.config, e.cs.URL)
 	br.start(e, br.direct+"/healthz")
 	bridgeFront := br.direct + "/front/bstore/v1"
 	e.eventually("the bridge's front statement is on the host", 2*time.Minute, func() bool {
@@ -837,4 +839,32 @@ func writeCert(t *testing.T, dir string) (string, string, *x509.CertPool) {
 	pool := x509.NewCertPool()
 	pool.AddCert(c)
 	return cp, kp, pool
+}
+
+// arcadeAfterFund moves a provider's configuration (or the bridge's
+// provider section) from the chain's RPC leg, which fund needs to mine its
+// coins, to the chain's arcade leg, where a payment can be taken on the
+// network's acceptance.
+func arcadeAfterFund(t *testing.T, path, chain string) {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	sec := cfg
+	if pr, ok := cfg["provider"].(map[string]any); ok {
+		sec = pr
+	}
+	if sec["settle"] != "rpc:"+chain+"/rpc" {
+		return
+	}
+	sec["settle"] = "arcade:" + chain + "/arcade"
+	raw, _ = json.MarshalIndent(cfg, "", "  ")
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
 }
