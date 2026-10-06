@@ -296,9 +296,15 @@ and the statements are looked for again every `statement_check_seconds`
   owed; once the incumbent's wallet spends the output, the writer's node
   shows it and the payee is done. A claim alone changes nothing on chain.
 - In a writer's settlement race the incumbent's own derived front is asked
-  first; an unchanged incumbent does not answer it, so that draw is spent
-  (frozen.md row C29) and the bridge answers the second. The bridge has one
-  draw, resent unchanged on a passing failure (row C23).
+  first; an unchanged incumbent has no such route, so that draw is spent,
+  at once when it answers `404` and after three tries when it does not
+  answer (frozen.md rows C23 and C29), and the bridge answers the second in
+  the same look. The bridge has one draw, resent unchanged on a passing
+  failure (row C23).
+- A paid challenge the bridge refuses after the buyer's payment arrived
+  (the incumbent unreachable, a damaged root) carries the bstore
+  provider's signed payment-not-taken note (bstore spec section 10.4, row
+  C30), so the buyer's coin is released at once.
 - An object shared by two closures is read under each root that names it,
   those with an unexpired advertisement first, before it is called missing.
 - With Range ignored or wrong, challenges are priced per sample as on a
