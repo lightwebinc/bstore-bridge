@@ -1,0 +1,196 @@
+// Command bstore-bridge joins an incumbent UHRP host to the bstore storage
+// market: bstore's provider as the market front over a bridge backend that
+// speaks the incumbent's own HTTP interfaces. See docs/bridge.md.
+//
+//	bstore-bridge init -data DIR          create the bridge's identity and wallet
+//	bstore-bridge address -config FILE    the identity and the fund address
+//	bstore-bridge rescan -config FILE -from H [-to H]
+//	                                      take coin paid to the fund address into the pool
+//	bstore-bridge fund -config FILE -blocks N
+//	                                      a test network only: mine N blocks to the fund address
+//	bstore-bridge run -config FILE        serve until interrupted
+//	bstore-bridge payouts -config FILE    the settlements forwarded for the incumbent
+//	bstore-bridge claim -remittances FILE -key-file F
+//	                                      the incumbent's operator: which forwarded outputs pay its key
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+
+	"github.com/lightwebinc/bcommon/bwallet"
+	"github.com/lightwebinc/bcommon/nodeapi"
+
+	"github.com/lightwebinc/bstore-bridge/bridge"
+	"github.com/lightwebinc/bstore/provider"
+)
+
+func main() {
+	if err := run(os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, "bstore-bridge:", err)
+		var u usageError
+		if errors.As(err, &u) {
+			os.Exit(2)
+		}
+		os.Exit(1)
+	}
+}
+
+type usageError struct{ error }
+
+const usage = `usage: bstore-bridge <command> [flags]
+
+commands:
+  init -data DIR                 create the bridge's identity and wallet under DIR
+  address -config FILE           print the identity key and the fund address
+  rescan -config FILE -from H [-to H]
+                                 take coin paid to the fund address in blocks H.. into the pool
+  fund -config FILE -blocks N    a test network only: mine N blocks to the fund address
+                                 through the node's RPC (settle rpc:<url>) and pool the coinbase
+  run -config FILE               serve until interrupted
+  payouts -config FILE           print the settlements forwarded for the incumbent, one JSON object a line
+  claim -remittances FILE -key-file F
+                                 the incumbent's operator, where its key is, with a copy of the bridge's
+                                 remittances.jsonl: print, for each forwarded output that pays the key
+                                 in F (64 hex digits or WIF, a file of mode 0600), what a BRC-100 wallet's
+                                 internalizeAction takes; the key is read, used and forgotten`
+
+func run(args []string) error {
+	if len(args) == 0 {
+		return usageError{errors.New(usage)}
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	fs := flag.NewFlagSet(args[0], flag.ContinueOnError)
+	data := fs.String("data", "", "data directory (init)")
+	cfgPath := fs.String("config", "", "configuration file")
+	from := fs.Uint("from", 0, "first block height to rescan")
+	to := fs.Uint("to", 0, "last block height to rescan (default the tip)")
+	blocks := fs.Int("blocks", 0, "blocks to mine (fund)")
+	keyFile := fs.String("key-file", "", "the incumbent's private key (claim)")
+	remPath := fs.String("remittances", "", "a copy of the bridge's remittances.jsonl (claim)")
+	if err := fs.Parse(args[1:]); err != nil {
+		return usageError{err}
+	}
+	switch args[0] {
+	case "init":
+		if *data == "" {
+			return usageError{errors.New("init needs -data")}
+		}
+		id, err := bridge.Init(*data)
+		if err != nil {
+			return err
+		}
+		fmt.Println("identity", id)
+		return nil
+	case "claim":
+		if *keyFile == "" || *remPath == "" {
+			return usageError{errors.New("claim needs -remittances and -key-file")}
+		}
+		rems, err := bridge.ReadRemittanceFile(*remPath)
+		if err != nil {
+			return err
+		}
+		key, err := bridge.ReadKey(*keyFile)
+		if err != nil {
+			return err
+		}
+		cl, err := bridge.Claim(rems, key)
+		if err != nil {
+			return err
+		}
+		enc := json.NewEncoder(os.Stdout)
+		for _, c := range cl {
+			_ = enc.Encode(c)
+		}
+		fmt.Fprintf(os.Stderr, "%d output(s) pay the key in %d forwarded settlement(s)\n", len(cl), len(rems))
+		return nil
+	case "address", "rescan", "fund", "run", "payouts":
+	default:
+		return usageError{fmt.Errorf("unknown command %q\n%s", args[0], usage)}
+	}
+	if *cfgPath == "" {
+		return usageError{errors.New(args[0] + " needs -config")}
+	}
+	cfg, err := bridge.LoadConfig(*cfgPath)
+	if err != nil {
+		return usageError{err}
+	}
+	pc := &cfg.Provider
+	switch args[0] {
+	case "payouts":
+		rems, err := bridge.ReadRemittances(pc.Data)
+		if err != nil {
+			return err
+		}
+		enc := json.NewEncoder(os.Stdout)
+		for _, r := range rems {
+			_ = enc.Encode(r)
+		}
+		return nil
+	case "address":
+		w, err := bwallet.Open(provider.WalletDir(pc.Data), provider.Profile)
+		if err != nil {
+			return err
+		}
+		addr, err := w.Signer().FundAddress(pc.Mainnet)
+		if err != nil {
+			return err
+		}
+		fmt.Println("identity", w.Signer().IdentityHex())
+		fmt.Println("fund address", addr)
+		fmt.Printf("pool %d output(s), %d satoshis\n", w.Pool.Count(), w.Pool.Balance())
+		return nil
+	case "rescan", "fund":
+		w, err := bwallet.Open(provider.WalletDir(pc.Data), provider.Profile)
+		if err != nil {
+			return err
+		}
+		asset := &nodeapi.Asset{Base: pc.Node}
+		if args[0] == "fund" {
+			kind, addr, _ := strings.Cut(pc.Settle, ":")
+			if kind != "rpc" || *blocks < 1 {
+				return usageError{errors.New("fund needs settle rpc:<url> and -blocks N (a test network's node)")}
+			}
+			rpc := &nodeapi.RPC{URL: addr, User: pc.RPCUser, Pass: pc.RPCPass, ID: "bstore-bridge"}
+			n, _, err := bwallet.FundFromCoinbase(ctx, w.Signer(), w.Pool, rpc, asset, *blocks, 50)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("%d coinbase output(s) pooled; pool %d satoshis\n", n, w.Pool.Balance())
+			return nil
+		}
+		top := uint32(*to)
+		if top == 0 {
+			h, err := asset.BestHeader(ctx)
+			if err != nil {
+				return err
+			}
+			top = h.Height
+		}
+		n, err := bwallet.Rescan(ctx, w.Signer(), w.Pool, asset, uint32(*from), top)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("%d output(s) found; pool %d satoshis\n", n, w.Pool.Balance())
+		return nil
+	}
+	b, err := bridge.Open(ctx, cfg, bridge.Options{})
+	if err != nil {
+		return err
+	}
+	if err := b.Start(ctx); err != nil {
+		return err
+	}
+	fmt.Printf("bstore-bridge %s listening on %s, front %s, for incumbent %s at %s\n", b.Identity(), b.Addr(), pc.FrontURL(),
+		cfg.Incumbent.Identity, cfg.Incumbent.URL)
+	<-ctx.Done()
+	return b.Close()
+}

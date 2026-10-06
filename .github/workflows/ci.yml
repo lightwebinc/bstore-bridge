@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    # bstore is a private module this job has no credentials for. Its tagged
+    # archive is in third_party/goproxy and is served as a file proxy ahead
+    # of the public one; go.sum holds the tag's hashes, so the copy is
+    # checked. The Makefile sets the same three for its own targets.
+    env:
+      GOPROXY: file://${{ github.workspace }}/third_party/goproxy,https://proxy.golang.org,direct
+      GONOPROXY: none
+      GONOSUMDB: github.com/lightwebinc/bstore
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.1"
+      - name: gofmt
+        run: make fmt-check
+      - name: vet
+        run: make vet
+      # The direct dependencies are exactly go-sdk, bcommon and bstore,
+      # go.mod is tidy, nothing is replaced, and go-sdk resolves to exactly
+      # v1.5.2.
+      - name: dependency set
+        run: make deps-check
+      # Unit tests: the bridge backend against the stand-in incumbent on a
+      # local test chain, in process; nothing leaves the runner.
+      - name: test
+        run: make test
