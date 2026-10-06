@@ -12,6 +12,8 @@
 //	bstore-bridge payouts -config FILE    the settlements forwarded for the incumbent
 //	bstore-bridge claim -remittances FILE -key-file F
 //	                                      the incumbent's operator: which forwarded outputs pay its key
+//	bstore-bridge doctor -config FILE [-ca FILE]
+//	                                      the front, the incumbent and whether everything answers; reads only
 //	bstore-bridge version                 print the version
 package main
 
@@ -65,6 +67,8 @@ commands:
                                  remittances.jsonl: print, for each forwarded output that pays the key
                                  in F (64 hex digits or WIF, a file of mode 0600), what a BRC-100 wallet's
                                  internalizeAction takes; the key is read, used and forgotten
+  doctor -config FILE [-ca FILE] the front as a provider's doctor reports it, then the incumbent: its
+                                 URL and lookup hosts answering, settlements forwarded; reads only
   version                        print the version
 
 docs/bridge.md is the operator's guide: what the incumbent must serve, the
@@ -92,6 +96,7 @@ func run(args []string) error {
 	blocks := fs.Int("blocks", 0, "blocks to mine (fund)")
 	keyFile := fs.String("key-file", "", "the incumbent's private key (claim)")
 	remPath := fs.String("remittances", "", "a copy of the bridge's remittances.jsonl (claim)")
+	caFile := fs.String("ca", "", "a PEM file trusted for the front's certificate (doctor)")
 	if err := fs.Parse(args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -131,7 +136,7 @@ func run(args []string) error {
 		}
 		fmt.Fprintf(os.Stderr, "%d output(s) pay the key in %d forwarded settlement(s)\n", len(cl), len(rems))
 		return nil
-	case "address", "rescan", "fund", "run", "payouts":
+	case "address", "rescan", "fund", "run", "payouts", "doctor":
 	default:
 		return usageError{fmt.Errorf("unknown command %q\n%s", args[0], usage)}
 	}
@@ -144,6 +149,8 @@ func run(args []string) error {
 	}
 	pc := &cfg.Provider
 	switch args[0] {
+	case "doctor":
+		return bridge.Doctor(ctx, cfg, *caFile, os.Stdout)
 	case "payouts":
 		rems, err := bridge.ReadRemittances(pc.Data)
 		if err != nil {

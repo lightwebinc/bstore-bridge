@@ -265,6 +265,7 @@ $ bstore-bridge address -config bridge.json
 $ bstore-bridge rescan -config bridge.json -from <height>
 $ bstore-bridge run -config bridge.json
 $ bstore-bridge payouts -config bridge.json
+$ bstore-bridge doctor -config bridge.json     # reads only: the front, the incumbent, the lookup hosts
 $ bstore-bridge claim -remittances remittances.jsonl -key-file incumbent.key
 ```
 
