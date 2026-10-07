@@ -375,10 +375,14 @@ func (b *Backend) Advertise(ctx context.Context, root [32]byte, until uint64) (*
 			b.clearPending(rec)
 		case b.now().Sub(time.Unix(pendingAt, 0)) < pendingHold:
 			// Paid, or perhaps paid: never paid again while its
-			// advertisement is awaited.
-			f, err := b.waitAd(ctx, root, rootLen, min(until, pendingUntil))
-			if err != nil {
-				return nil, fmt.Errorf("a commit or renewal through %d made at %d is awaited: %w", pendingUntil, pendingAt, err)
+			// advertisement is awaited. One look, not a wait: Advertise
+			// holds advMu, and waiting here for an advertisement that may
+			// never come (the incumbent refused the commit after taking
+			// the payment) would stall every other root's commit and
+			// renewal behind it, AdWaitSeconds at a time.
+			f := best
+			if f == nil || f.Ad.Expiry < min(until, pendingUntil) {
+				return nil, fmt.Errorf("a commit or renewal through %d made at %d is awaited: the incumbent's advertisement through %d is not seen mined on ls_uhrp yet; looked for again later", pendingUntil, pendingAt, min(until, pendingUntil))
 			}
 			if f.Ad.Expiry >= until {
 				return b.adopt(ctx, root, rec, objs, f)

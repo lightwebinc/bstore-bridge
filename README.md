@@ -30,7 +30,7 @@ $ make docker-build    # the image, ghcr.io/lightwebinc/bstore-bridge
 | Learn the market by role (the bridge operator's section among them) | bstore's `docs/user-guide.md` |
 | The contract the bridge implements | bstore's `docs/spec.md`, section 17 |
 
-Go 1.27. The bridge pins bstore v0.4.0, bcommon v0.10.0 and go-sdk v1.5.2;
+Go 1.27. The bridge pins bstore v0.5.0, bcommon v0.10.0 and go-sdk v1.5.2;
 bstore, a private module, is committed under `third_party/goproxy` (`make
 bstore-module` refreshes it).
 

@@ -23,6 +23,27 @@ An incumbent without upload sessions (one that only takes the whole-file
 be bridged: that flow advertises at a URL that is not a CHIRP route, which
 the market does not count (spec section 9.3).
 
+### In front of uhrp-server-basic
+
+What the bridge meets in front of the reference incumbent, ts-stack
+`infra/uhrp-server-basic` (checked against ts-stack `52fc646`):
+
+- **The handshake.** The incumbent runs the TypeScript SDK's BRC-104
+  middleware, which refuses go-sdk v1.5.2's handshake (its
+  `requestedCertificates` carries Go's field names) as malformed. The
+  bridge sends the handshake in the wire shape (`certifiers`, `types`).
+- **An empty JSON body.** The middleware reads a body of `{}` as no body,
+  so a signed `{}` fails authentication; the bridge's unpaid first call is
+  `/renew` with `{"uhrpUrl":""}`, refused (400) and signed.
+- **Range is ignored.** The object route answers every request 200 with
+  the whole object. Price challenges for it (see Range, below).
+- **CHIRP commits.** From ts-stack `b3155fa2` (2026-09-22) the server's
+  advertisement metadata check accepts only a `/cdn/<object>` location, so
+  every CHIRP commit fails after its payment is taken (400
+  `ERR_CHIRP_COMMIT`). Such an incumbent cannot be bridged until its
+  operator runs a build that accepts the CHIRP committed-object URL; the
+  bridge pays that commit once and waits a day before paying again.
+
 ## How it works
 
 The bridge is bstore's provider (`bstore/provider`) run as a **front**

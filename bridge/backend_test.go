@@ -446,9 +446,17 @@ func TestBackendNeverPaysTwice(t *testing.T) {
 	}
 	paid := r.fake.Paid
 	r.fake.SetFailAfterPay(false)
+	// Looked at once, not waited for: Advertise holds the bridge's one
+	// advertise lock, and a wait here stalls every other root.
+	icfg.AdWaitSeconds = 60
+	start := time.Now()
 	if _, err := b.Advertise(ctx, root, until); err == nil || r.fake.Paid != paid || r.fake.Commits != 0 {
 		t.Fatalf("paid again while the first payment's advertisement is awaited: %v, paid %d then %d", err, paid, r.fake.Paid)
 	}
+	if d := time.Since(start); d > 20*time.Second {
+		t.Fatalf("an awaited commit held Advertise for %s", d)
+	}
+	icfg.AdWaitSeconds = 1
 
 	// A daily budget the next payment would pass refuses it before it is
 	// made.

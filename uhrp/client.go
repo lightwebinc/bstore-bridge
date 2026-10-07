@@ -13,6 +13,7 @@
 package uhrp
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -130,8 +131,10 @@ func (c *Client) do(ctx context.Context, method, u string, headers map[string]st
 	}
 	if maxPay > 0 && !c.isVerified() {
 		// An unpaid, authenticated call first: the incumbent's /renew with
-		// nothing in it is refused (400), signed.
-		if _, err := c.do(ctx, http.MethodPost, c.url("/renew"), map[string]string{"content-type": "application/json"}, []byte("{}"), 0); err != nil {
+		// no uhrpUrl is refused (400), signed. Not an empty object: the
+		// TypeScript auth middleware reads a JSON body of {} as no body,
+		// and the signature over "{}" then fails (401, unsigned).
+		if _, err := c.do(ctx, http.MethodPost, c.url("/renew"), map[string]string{"content-type": "application/json"}, []byte(`{"uhrpUrl":""}`), 0); err != nil {
 			return nil, err
 		}
 	}
@@ -488,6 +491,9 @@ type limitTransport struct {
 }
 
 func (t limitTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if err := wireCertificateSet(req); err != nil {
+		return nil, err
+	}
 	res, err := t.base.RoundTrip(req)
 	if err != nil {
 		return nil, err
@@ -501,4 +507,59 @@ func (t limitTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		io.Closer
 	}{io.LimitReader(res.Body, t.max), res.Body}
 	return res, nil
+}
+
+// wireCertificateSet puts a BRC-103 handshake's requestedCertificates in
+// the wire shape, {"certifiers": [...], "types": {...}}. go-sdk v1.5.2
+// (the version bcommon pins) serialises its RequestedCertificateSet with
+// Go's field names, {"Certifiers": [...], "CertificateTypes": {...}}, and
+// the TypeScript SDK the incumbent runs (@bsv/sdk 3) refuses that
+// handshake as malformed (400 ERR_AUTH_MALFORMED). go-sdk v1.7.1 emits the
+// wire shape itself; this goes once bcommon moves to it. Only the
+// unsigned initialRequest and certificateRequest to /.well-known/auth carry
+// the set, and only its two key names are changed.
+func wireCertificateSet(req *http.Request) error {
+	if req.Method != http.MethodPost || req.URL.Path != "/.well-known/auth" || req.Body == nil {
+		return nil
+	}
+	raw, err := io.ReadAll(io.LimitReader(req.Body, 1<<20+1))
+	req.Body.Close()
+	if err != nil {
+		return err
+	}
+	if len(raw) > 1<<20 {
+		return errors.New("uhrp: a handshake message over 1 MiB")
+	}
+	var msg map[string]json.RawMessage
+	if json.Unmarshal(raw, &msg) == nil {
+		if set, ok := msg["requestedCertificates"]; ok {
+			var fields map[string]json.RawMessage
+			if json.Unmarshal(set, &fields) == nil {
+				if v, ok := fields["Certifiers"]; ok {
+					delete(fields, "Certifiers")
+					if string(v) == "null" {
+						v = json.RawMessage("[]")
+					}
+					fields["certifiers"] = v
+				}
+				if v, ok := fields["CertificateTypes"]; ok {
+					delete(fields, "CertificateTypes")
+					if string(v) == "null" {
+						v = json.RawMessage("{}")
+					}
+					fields["types"] = v
+				}
+				if b, err := json.Marshal(fields); err == nil {
+					msg["requestedCertificates"] = b
+					if out, err := json.Marshal(msg); err == nil {
+						raw = out
+					}
+				}
+			}
+		}
+	}
+	req.Body = io.NopCloser(bytes.NewReader(raw))
+	req.ContentLength = int64(len(raw))
+	req.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(raw)), nil }
+	return nil
 }
