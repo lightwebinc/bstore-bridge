@@ -73,8 +73,16 @@ fund address 1...
 pool 0 output(s), 0 satoshis
 ```
 
-Send 100,000 satoshis from your own wallet to the fund address. Once the
-payment has a block:
+Send 100,000 satoshis from your own wallet to the fund address. If your
+wallet hands you the payment as BEEF, import that at once:
+
+```console
+$ bstore-bridge fund -config bridge.json -beef payment.beef
+4f3c...e9a1 not mined yet (held until it mines): 1 output(s) to the fund address, 1 imported (100000 satoshis), 0 already held, 0 spent
+pool 1 output(s), 100000 satoshis
+```
+
+Or, once the payment has a block, by its txid:
 
 ```console
 $ bstore-bridge fund -config bridge.json -txid 4f3c...e9a1
@@ -82,9 +90,13 @@ $ bstore-bridge fund -config bridge.json -txid 4f3c...e9a1
 pool 1 output(s), 100000 satoshis
 ```
 
-The proof is checked against the header source and each output is asked
-of the node before it is pooled; importing the same payment twice adds
-nothing. The pool pays the incumbent's commit and renewal prices (capped
+From the BEEF, no lookup is made: a mined payment's proof is checked
+against the header source, and one not mined yet is taken when every
+transaction it spends is proven (`-refuse-unmined` takes mined payments
+only), sent to the settlement leg, and held until it mines. By txid, the
+proof is checked against the header source and each output is asked of
+the node before it is pooled. A payment that pays the fund address nothing
+is refused. Importing the same payment twice adds nothing. The pool pays the incumbent's commit and renewal prices (capped
 by `max_sats_per_gib_day`, `min_payment` and `max_sats_per_day`) and the
 funding of the bridge's front statements.
 

@@ -115,15 +115,17 @@ command flag, and the image.
 $ bstore-bridge init -data /var/lib/bstore-bridge
 identity 02...
 $ bstore-bridge address -config bridge.json
-$ bstore-bridge fund -config bridge.json -txid <txid>
+$ bstore-bridge fund -config bridge.json -beef payment.beef   # or -txid <txid> once mined
 $ bstore-bridge run -config bridge.json
 $ bstore-bridge payouts -config bridge.json
 $ bstore-bridge doctor -config bridge.json     # reads only: the front, the incumbent, the lookup hosts
 $ bstore-bridge claim -remittances remittances.jsonl -key-file incumbent.key
 ```
 
-Pay the fund address from your own wallet and, once the payment is mined,
-import it with `fund -txid`: the pool pays the incumbent's prices and the
+Pay the fund address from your own wallet and import the payment: from the
+BEEF your wallet handed over (`fund -beef FILE`, or `-` for standard input;
+it need not have mined, and its outputs wait in the pool until it does),
+or by its txid once it is mined (`fund -txid`). The pool pays the incumbent's prices and the
 front statements' funding outputs. (`rescan -from` and `fund -blocks` are
 coinbase: only on a regtest chain you run, for development and tests.) Behind a
 TLS proxy, route `<public_url>/bstore/v1/`, `/.well-known/auth` at the

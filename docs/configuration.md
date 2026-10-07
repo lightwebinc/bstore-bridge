@@ -10,7 +10,7 @@ the code. [bridge.md](bridge.md) is the operator's guide;
 | --- | --- |
 | `init` | `-data DIR`: create the bridge's identity and wallet |
 | `address` | `-config FILE`: print the identity, the fund address and the pool |
-| `fund` | `-config FILE -txid TXID`: import a mined payment you sent to the fund address (mainnet, testnet). `-blocks N`: **coinbase: only on a regtest chain you run (development and tests)** |
+| `fund` | `-config FILE -beef FILE` (or `-` for standard input; bytes or hex): import a payment you sent to the fund address from the BEEF your wallet handed over, with no lookup; one not mined yet is taken when every transaction it spends is proven, sent to the settlement leg, and held in the pool until it mines, unless `-refuse-unmined`. `-txid TXID`: import a mined payment by its txid (mainnet, testnet). `-blocks N`: **coinbase: only on a regtest chain you run (development and tests)** |
 | `rescan` | `-config FILE -from H [-to H]`: **coinbase: only on a regtest chain you run (development and tests)**; it finds coinbase only, never an ordinary payment |
 | `run` | `-config FILE` |
 | `payouts` | `-config FILE`: the settlements forwarded for the incumbent, one JSON object a line |

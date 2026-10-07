@@ -50,7 +50,9 @@ type Bridge struct {
 	inc  *uhrp.Client
 	hc   *http.Client
 
-	asset *nodeapi.Asset
+	// chain is the chain view the bridge's own reads go to (a node's,
+	// the front's node); every proof is checked against hdrs.
+	chain nodeapi.Chain
 	hdrs  *headers.Client
 
 	fmu    sync.Mutex // remittances.jsonl
@@ -83,10 +85,14 @@ func Open(ctx context.Context, cfg *Config, opts Options) (*Bridge, error) {
 	if err != nil {
 		return nil, err
 	}
-	b := &Bridge{cfg: cfg, opts: opts, hc: hc, asset: &nodeapi.Asset{Base: cfg.Provider.Node}, hdrs: hdrs}
+	chain, err := nodeapi.ParseChain("asset:"+cfg.Provider.Node, nodeapi.ChainOptions{Headers: hdrs})
+	if err != nil {
+		return nil, fmt.Errorf("provider.node: %w", err)
+	}
+	b := &Bridge{cfg: cfg, opts: opts, hc: hc, chain: chain, hdrs: hdrs}
 	b.inc = &uhrp.Client{Base: cfg.Incumbent.URL, HTTP: hc, Identity: cfg.Incumbent.IdentityKey()}
 	logf := func(format string, args ...any) { opts.Logf("bstore-bridge: "+format, args...) }
-	be, err := newBackend(filepath.Join(cfg.Provider.Data, "bridge"), &cfg.Incumbent, b.inc, b.asset, hdrs, logf, opts.Now)
+	be, err := newBackend(filepath.Join(cfg.Provider.Data, "bridge"), &cfg.Incumbent, b.inc, b.chain, hdrs, logf, opts.Now)
 	if err != nil {
 		return nil, err
 	}
@@ -270,8 +276,8 @@ func (b *Bridge) publishStatement(ctx context.Context, bucket string, hosts []st
 	}
 	fees := b.p.Fees()
 	pay := b.p.NewPayer()
-	if h, err := b.asset.BestHeader(ctx); err == nil {
-		pay.Tip = h.Height
+	if h, err := b.hdrs.CurrentHeight(ctx); err == nil {
+		pay.Tip = h
 	}
 	fee, err := pay.TakeAtLeast(ctx, 1+fees.Floor*4)
 	if err != nil {
@@ -294,7 +300,7 @@ func (b *Bridge) publishStatement(ctx context.Context, bucket string, hosts []st
 	}
 	wctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
-	mp, height, err := nodeapi.WaitMined(wctx, b.asset, tree.TxID().String(), b.opts.Poll)
+	mp, height, err := nodeapi.WaitMinedOn(wctx, b.chain, tree.TxID().String(), b.opts.Poll)
 	if err != nil {
 		pay.Change(tree, 0, nil)
 		return fmt.Errorf("the statement's funding output is not mined: %w", err)

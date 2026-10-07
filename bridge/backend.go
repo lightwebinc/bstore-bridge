@@ -90,7 +90,7 @@ type Backend struct {
 	icfg *Incumbent
 	key  []byte
 
-	asset *nodeapi.Asset
+	asset nodeapi.Chain
 	hdrs  chaintracker.ChainTracker
 	logf  func(string, ...any)
 	now   func() time.Time
@@ -135,7 +135,7 @@ var (
 
 // newBackend opens the bridge's state under dir and indexes the objects of
 // every closure an advertisement was adopted for.
-func newBackend(dir string, icfg *Incumbent, inc *uhrp.Client, asset *nodeapi.Asset, hdrs chaintracker.ChainTracker,
+func newBackend(dir string, icfg *Incumbent, inc *uhrp.Client, asset nodeapi.Chain, hdrs chaintracker.ChainTracker,
 	logf func(string, ...any), now func() time.Time) (*Backend, error) {
 	st, err := loadState(dir)
 	if err != nil {

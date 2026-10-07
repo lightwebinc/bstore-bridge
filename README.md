@@ -42,7 +42,8 @@ the [Dockerfile](Dockerfile) ([configuration](docs/configuration.md#container-im
 ```console
 $ bstore-bridge init -data /var/lib/bstore-bridge
 $ bstore-bridge address -config bridge.json      # pay the fund address from your own wallet
-$ bstore-bridge fund -config bridge.json -txid <txid>   # once mined, import the payment
+$ bstore-bridge fund -config bridge.json -beef payment.beef   # the payment your wallet handed over
+$ bstore-bridge fund -config bridge.json -txid <txid>   # or, once mined, by its txid
 $ bstore-bridge doctor -config bridge.json       # reads only: does everything answer
 $ bstore-bridge run -config bridge.json
 ```

@@ -4,6 +4,8 @@
 //
 //	bstore-bridge init -data DIR          create the bridge's identity and wallet
 //	bstore-bridge address -config FILE    the identity and the fund address
+//	bstore-bridge fund -config FILE -beef FILE
+//	                                      import a payment you sent to the fund address, from its BEEF
 //	bstore-bridge fund -config FILE -txid TXID
 //	                                      import a mined payment you sent to the fund address
 //	bstore-bridge rescan -config FILE -from H [-to H]
@@ -33,11 +35,9 @@ import (
 	"syscall"
 
 	"github.com/lightwebinc/bcommon/bwallet"
-	"github.com/lightwebinc/bcommon/headers"
 	"github.com/lightwebinc/bcommon/nodeapi"
 
 	"github.com/lightwebinc/bstore-bridge/bridge"
-	"github.com/lightwebinc/bstore-bridge/internal/fundimport"
 	"github.com/lightwebinc/bstore/provider"
 )
 
@@ -62,6 +62,10 @@ const usage = `usage: bstore-bridge <command> [flags]
 commands:
   init -data DIR                 create the bridge's identity and wallet under DIR
   address -config FILE           print the identity key and the fund address
+  fund -config FILE -beef FILE   import a payment you sent to the fund address from the BEEF
+                                 your wallet gave you (FILE, or - for standard input): no lookup;
+                                 one not mined yet waits in the pool until it mines, unless
+                                 -refuse-unmined (mainnet, testnet)
   fund -config FILE -txid TXID   import a mined payment you sent to the fund address: every
                                  output paying it that the node shows unspent, its proof checked
                                  against the header source (mainnet, testnet)
@@ -103,6 +107,8 @@ func run(args []string) error {
 	data := fs.String("data", "", "data directory (init)")
 	cfgPath := fs.String("config", "", "configuration file")
 	txid := fs.String("txid", "", "import the outputs of a mined payment to the fund address (fund; mainnet, testnet)")
+	beef := fs.String("beef", "", "import a payment to the fund address from its BEEF, a file or - (fund; mainnet, testnet)")
+	refuse := fs.Bool("refuse-unmined", false, "with -beef, take a mined payment only")
 	from := fs.Uint("from", 0, "coinbase: only on a regtest chain you run (development and tests): first block height to rescan for coinbase")
 	to := fs.Uint("to", 0, "last block height to rescan for coinbase (default the tip)")
 	blocks := fs.Int("blocks", 0, "coinbase: only on a regtest chain you run (development and tests): blocks to mine (fund)")
@@ -191,25 +197,33 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
-		asset := &nodeapi.Asset{Base: pc.Node}
-		if args[0] == "fund" && *txid != "" {
-			hc, err := headers.NewSource(pc.Headers)
-			if err != nil {
-				return usageError{fmt.Errorf("headers: %w", err)}
+		f, err := newFunder(pc)
+		if err != nil {
+			return usageError{err}
+		}
+		if args[0] == "fund" && (*txid != "" || *beef != "") {
+			var res funded
+			if *txid != "" {
+				res, err = f.txid(ctx, w, *txid)
+			} else {
+				raw, rerr := readBEEF(*beef)
+				if rerr != nil {
+					return usageError{rerr}
+				}
+				res, err = f.beef(ctx, w, raw, *refuse)
 			}
-			res, err := fundimport.Import(ctx, w.Signer(), w.Pool, asset, hc, *txid)
 			if err != nil {
 				return err
 			}
-			fmt.Printf("%s mined at height %d: %d output(s) to the fund address, %d imported (%d satoshis), %d already held, %d spent\n",
-				res.TxID, res.Height, res.Paying, res.Added, res.Satoshis, res.Held, res.Spent)
+			fmt.Println(res)
 			fmt.Printf("pool %d output(s), %d satoshis\n", w.Pool.Count(), w.Pool.Balance())
 			return nil
 		}
+		asset := &nodeapi.Asset{Base: pc.Node}
 		if args[0] == "fund" {
 			kind, addr, _ := strings.Cut(pc.Settle, ":")
 			if kind != "rpc" || *blocks < 1 {
-				return usageError{errors.New("fund needs -txid TXID, or (coinbase: only on a regtest chain you run) settle rpc:<url> and -blocks N")}
+				return usageError{errors.New("fund needs -beef FILE or -txid TXID, or (coinbase: only on a regtest chain you run) settle rpc:<url> and -blocks N")}
 			}
 			rpc := &nodeapi.RPC{URL: addr, User: pc.RPCUser, Pass: pc.RPCPass, ID: "bstore-bridge"}
 			n, _, err := bwallet.FundFromCoinbase(ctx, w.Signer(), w.Pool, rpc, asset, *blocks, 50)
@@ -221,11 +235,11 @@ func run(args []string) error {
 		}
 		top := uint32(*to)
 		if top == 0 {
-			h, err := asset.BestHeader(ctx)
+			h, err := f.headers.CurrentHeight(ctx)
 			if err != nil {
 				return err
 			}
-			top = h.Height
+			top = h
 		}
 		n, err := bwallet.Rescan(ctx, w.Signer(), w.Pool, asset, uint32(*from), top)
 		if err != nil {
