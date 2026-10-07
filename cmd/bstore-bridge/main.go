@@ -4,10 +4,14 @@
 //
 //	bstore-bridge init -data DIR          create the bridge's identity and wallet
 //	bstore-bridge address -config FILE    the identity and the fund address
+//	bstore-bridge fund -config FILE -txid TXID
+//	                                      import a mined payment you sent to the fund address
 //	bstore-bridge rescan -config FILE -from H [-to H]
-//	                                      take coin paid to the fund address into the pool
+//	                                      coinbase: only on a regtest chain you run (development
+//	                                      and tests); take coinbase paying the fund address into the pool
 //	bstore-bridge fund -config FILE -blocks N
-//	                                      a test network only: mine N blocks to the fund address
+//	                                      coinbase: only on a regtest chain you run (development
+//	                                      and tests); mine N blocks to the fund address
 //	bstore-bridge run -config FILE        serve until interrupted
 //	bstore-bridge payouts -config FILE    the settlements forwarded for the incumbent
 //	bstore-bridge claim -remittances FILE -key-file F
@@ -29,9 +33,11 @@ import (
 	"syscall"
 
 	"github.com/lightwebinc/bcommon/bwallet"
+	"github.com/lightwebinc/bcommon/headers"
 	"github.com/lightwebinc/bcommon/nodeapi"
 
 	"github.com/lightwebinc/bstore-bridge/bridge"
+	"github.com/lightwebinc/bstore-bridge/internal/fundimport"
 	"github.com/lightwebinc/bstore/provider"
 )
 
@@ -56,10 +62,15 @@ const usage = `usage: bstore-bridge <command> [flags]
 commands:
   init -data DIR                 create the bridge's identity and wallet under DIR
   address -config FILE           print the identity key and the fund address
+  fund -config FILE -txid TXID   import a mined payment you sent to the fund address: every
+                                 output paying it that the node shows unspent, its proof checked
+                                 against the header source (mainnet, testnet)
   rescan -config FILE -from H [-to H]
-                                 take coin paid to the fund address in blocks H.. into the pool
-  fund -config FILE -blocks N    a test network only: mine N blocks to the fund address
-                                 through the node's RPC (settle rpc:<url>) and pool the coinbase
+                                 coinbase: only on a regtest chain you run (development and tests);
+                                 take coinbase paying the fund address in blocks H.. into the pool
+  fund -config FILE -blocks N    coinbase: only on a regtest chain you run (development and tests);
+                                 mine N blocks to the fund address through the node's RPC
+                                 (settle rpc:<url>) and pool the coinbase
   run -config FILE               serve until interrupted
   payouts -config FILE           print the settlements forwarded for the incumbent, one JSON object a line
   claim -remittances FILE -key-file F
@@ -91,9 +102,10 @@ func run(args []string) error {
 	fs := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	data := fs.String("data", "", "data directory (init)")
 	cfgPath := fs.String("config", "", "configuration file")
-	from := fs.Uint("from", 0, "first block height to rescan")
-	to := fs.Uint("to", 0, "last block height to rescan (default the tip)")
-	blocks := fs.Int("blocks", 0, "blocks to mine (fund)")
+	txid := fs.String("txid", "", "import the outputs of a mined payment to the fund address (fund; mainnet, testnet)")
+	from := fs.Uint("from", 0, "coinbase: only on a regtest chain you run (development and tests): first block height to rescan for coinbase")
+	to := fs.Uint("to", 0, "last block height to rescan for coinbase (default the tip)")
+	blocks := fs.Int("blocks", 0, "coinbase: only on a regtest chain you run (development and tests): blocks to mine (fund)")
 	keyFile := fs.String("key-file", "", "the incumbent's private key (claim)")
 	remPath := fs.String("remittances", "", "a copy of the bridge's remittances.jsonl (claim)")
 	caFile := fs.String("ca", "", "a PEM file trusted for the front's certificate (doctor)")
@@ -180,10 +192,24 @@ func run(args []string) error {
 			return err
 		}
 		asset := &nodeapi.Asset{Base: pc.Node}
+		if args[0] == "fund" && *txid != "" {
+			hc, err := headers.NewSource(pc.Headers)
+			if err != nil {
+				return usageError{fmt.Errorf("headers: %w", err)}
+			}
+			res, err := fundimport.Import(ctx, w.Signer(), w.Pool, asset, hc, *txid)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("%s mined at height %d: %d output(s) to the fund address, %d imported (%d satoshis), %d already held, %d spent\n",
+				res.TxID, res.Height, res.Paying, res.Added, res.Satoshis, res.Held, res.Spent)
+			fmt.Printf("pool %d output(s), %d satoshis\n", w.Pool.Count(), w.Pool.Balance())
+			return nil
+		}
 		if args[0] == "fund" {
 			kind, addr, _ := strings.Cut(pc.Settle, ":")
 			if kind != "rpc" || *blocks < 1 {
-				return usageError{errors.New("fund needs settle rpc:<url> and -blocks N (a test network's node)")}
+				return usageError{errors.New("fund needs -txid TXID, or (coinbase: only on a regtest chain you run) settle rpc:<url> and -blocks N")}
 			}
 			rpc := &nodeapi.RPC{URL: addr, User: pc.RPCUser, Pass: pc.RPCPass, ID: "bstore-bridge"}
 			n, _, err := bwallet.FundFromCoinbase(ctx, w.Signer(), w.Pool, rpc, asset, *blocks, 50)
