@@ -36,9 +36,9 @@ fmt-check:
 # The direct dependencies, asserted rather than intended:
 #  - go.mod and go.sum are tidy, and no module is replaced;
 #  - the direct set is exactly go-sdk, bcommon and bstore;
-#  - go-sdk resolves to exactly v1.5.2, the version bcommon and bstore pin.
+#  - go-sdk resolves to exactly v1.7.1, the version bcommon and bstore pin.
 DEPS_DIRECT := github.com/bsv-blockchain/go-sdk github.com/lightwebinc/bcommon $(BSTORE)
-DEPS_SDK    := github.com/bsv-blockchain/go-sdk v1.5.2
+DEPS_SDK    := github.com/bsv-blockchain/go-sdk v1.7.1
 
 deps-check:
 	@set -eu; \

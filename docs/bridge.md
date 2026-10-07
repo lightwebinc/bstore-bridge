@@ -29,9 +29,9 @@ What the bridge meets in front of the reference incumbent, ts-stack
 `infra/uhrp-server-basic` (checked against ts-stack `52fc646`):
 
 - **The handshake.** The incumbent runs the TypeScript SDK's BRC-104
-  middleware, which refuses go-sdk v1.5.2's handshake (its
-  `requestedCertificates` carries Go's field names) as malformed. The
-  bridge sends the handshake in the wire shape (`certifiers`, `types`).
+  middleware, which refuses a handshake whose `requestedCertificates`
+  carries Go's field names as malformed. go-sdk v1.7.1, which the bridge
+  pins, sends the wire shape (`certifiers`, `types`) itself.
 - **An empty JSON body.** The middleware reads a body of `{}` as no body,
   so a signed `{}` fails authentication; the bridge's unpaid first call is
   `/renew` with `{"uhrpUrl":""}`, refused (400) and signed.
