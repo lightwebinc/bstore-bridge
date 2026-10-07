@@ -507,3 +507,91 @@ func TestClientRefusesUnauthenticatedAnswers(t *testing.T) {
 		t.Fatalf("the client went on after an unauthenticated answer: %v", err)
 	}
 }
+
+// An incumbent build with the CHIRP commit location regression is refused
+// before anything is paid: from its free API description, and, once one has
+// refused a paid commit that way, from that record while its build is the
+// same. Under chirp_commit "trust", a record from before the bridge started
+// is forgotten.
+func TestBackendRefusesTheCommitLocationRegression(t *testing.T) {
+	r := newRig(t)
+	ctx := r.ctx
+	objs := map[[32]byte][]byte{}
+	icfg := r.incumbent()
+	icfg.AdWaitSeconds = 1
+	until := uint64(time.Now().Unix()) + 86400
+
+	// The affected range's description: refused, nothing paid or staged.
+	r.fake.SetOpenAPI([]byte(`{"openapi":"3.1.0","components":{"securitySchemes":{"bsvAuth":{"type":"http"}}},"paths":{"/chirp/v1/uploads/{uploadId}/commit":{}}}`))
+	b := r.backend(filepath.Join(t.TempDir(), "probe"), icfg, objs)
+	built, o := put(t, b, content(9000, 7))
+	for k, v := range o {
+		objs[k] = v
+	}
+	if _, err := b.Advertise(ctx, built.RootHash, until); !errors.Is(err, ErrIncumbentBuild) || r.fake.Paid != 0 {
+		t.Fatalf("an affected build: %v, paid %d", err, r.fake.Paid)
+	}
+	if b.st.Roots[hexOf(built.RootHash)].PendingAt != 0 {
+		t.Fatal("a refused commit left a pending payment")
+	}
+
+	// A build the description does not name, which refuses a paid commit
+	// with the regression: recorded, and the next commit is refused unpaid.
+	r.fake.SetOpenAPI(nil)
+	r.fake.SetLocationBug(true)
+	dir := filepath.Join(t.TempDir(), "learned")
+	b2 := r.backend(dir, icfg, objs)
+	for h, d := range o {
+		_ = b2.Put(h, d)
+	}
+	if _, err := b2.Advertise(ctx, built.RootHash, until); err == nil || r.fake.Paid == 0 {
+		t.Fatalf("a paid commit refused: %v, paid %d", err, r.fake.Paid)
+	}
+	if b2.st.CommitBroken == nil {
+		t.Fatal("the refusal was not recorded")
+	}
+	paid := r.fake.Paid
+	r.fake.SetLocationBug(false)
+	built2, o2 := put(t, b2, content(9000, 8))
+	for k, v := range o2 {
+		objs[k] = v
+	}
+	if _, err := b2.Advertise(ctx, built2.RootHash, until); !errors.Is(err, ErrIncumbentBuild) || r.fake.Paid != paid {
+		t.Fatalf("after a recorded refusal: %v, paid %d then %d", err, paid, r.fake.Paid)
+	}
+
+	// The operator states the build is fixed and restarts the bridge: the
+	// record is forgotten and the commit goes through.
+	time.Sleep(1100 * time.Millisecond)
+	trusted := *icfg
+	trusted.CHIRPCommit = "trust"
+	r.fake.SetOpenAPI([]byte(`{"openapi":"3.1.0","components":{"securitySchemes":{"bsvAuth":{"type":"http"}}},"paths":{"/chirp/v1/uploads/{uploadId}/commit":{}}}`))
+	b3 := r.backend(dir, &trusted, objs)
+	for h, d := range o2 {
+		_ = b3.Put(h, d)
+	}
+	if _, err := b3.Advertise(ctx, built2.RootHash, until); err != nil {
+		t.Fatalf("a trusted build: %v", err)
+	}
+	if b3.st.CommitBroken != nil {
+		t.Fatal("the record was kept under trust after a restart")
+	}
+
+	// A renewal re-signs the CHIRP location: under probe, an affected
+	// build's renewal is refused before it is paid for too.
+	before := r.fake.Paid
+	if _, err := b3.Advertise(ctx, built2.RootHash, until+86400); err != nil {
+		t.Fatalf("a trusted renewal: %v", err)
+	}
+	if r.fake.Renewals == 0 || r.fake.Paid == before {
+		t.Fatalf("no renewal made: %d renewals, paid %d", r.fake.Renewals, r.fake.Paid)
+	}
+	b4 := r.backend(dir, icfg, objs)
+	for h, d := range o2 {
+		_ = b4.Put(h, d)
+	}
+	paid = r.fake.Paid
+	if _, err := b4.Advertise(ctx, built2.RootHash, until+2*86400); !errors.Is(err, ErrIncumbentBuild) || r.fake.Paid != paid {
+		t.Fatalf("an affected build's renewal: %v, paid %d then %d", err, paid, r.fake.Paid)
+	}
+}

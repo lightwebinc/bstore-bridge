@@ -68,6 +68,17 @@ type Incumbent struct {
 	// looks for the incumbent's advertisement (mined) before the call
 	// fails; the front tries again later.
 	AdWaitSeconds uint64 `json:"ad_wait_seconds,omitempty"`
+	// CHIRPCommit is how the bridge decides that the incumbent's build can
+	// commit a CHIRP root before it pays for a commit. "probe" (the
+	// default): the incumbent's free API description is read first, and a
+	// build in the range with the upstream commit location regression
+	// (ts-stack b3155fa2 onward, where every CHIRP commit fails after
+	// payment) is refused without paying, commits and renewals alike;
+	// so, until the bridge restarts, is a build that took a payment and
+	// refused it with its catch-all answer. "trust": the operator states
+	// the incumbent's build carries the fix, and the description is not
+	// held against it.
+	CHIRPCommit string `json:"chirp_commit,omitempty"`
 }
 
 // LoadConfig reads and checks a configuration file.
@@ -113,6 +124,13 @@ func (c *Config) Check() error {
 	}
 	if i.AdWaitSeconds == 0 {
 		i.AdWaitSeconds = 300
+	}
+	switch i.CHIRPCommit {
+	case "":
+		i.CHIRPCommit = "probe"
+	case "probe", "trust":
+	default:
+		return fmt.Errorf("incumbent.chirp_commit %q: probe or trust", i.CHIRPCommit)
 	}
 	if i.MaxSatsPerDay == 0 {
 		i.MaxSatsPerDay = 1_000_000

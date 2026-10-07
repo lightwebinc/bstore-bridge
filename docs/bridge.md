@@ -39,10 +39,54 @@ What the bridge meets in front of the reference incumbent, ts-stack
   the whole object. Price challenges for it (see Range, below).
 - **CHIRP commits.** From ts-stack `b3155fa2` (2026-09-22) the server's
   advertisement metadata check accepts only a `/cdn/<object>` location, so
-  every CHIRP commit fails after its payment is taken (400
-  `ERR_CHIRP_COMMIT`). Such an incumbent cannot be bridged until its
-  operator runs a build that accepts the CHIRP committed-object URL; the
-  bridge pays that commit once and waits a day before paying again.
+  every CHIRP commit fails after its payment is taken: the server logs
+  "UHRP hosted file location is invalid" and answers 400
+  `ERR_CHIRP_COMMIT` ("CHIRP closure validation or advertisement
+  failed."), its generic commit refusal. Such an
+  incumbent cannot be bridged until its operator runs a build that accepts
+  the CHIRP committed-object URL. The bridge refuses it before paying
+  (below, "The commit build check").
+
+### The commit build check
+
+Before a commit or a renewal is paid for (a renewal re-signs the
+advertisement's CHIRP location, so the regression refuses it too), the
+bridge reads the incumbent's API description,
+`GET <url>/chirp/v1/openapi.json`, which every uhrp-server-basic with
+upload sessions serves without authentication or payment. ts-stack
+`b3155fa2` added the location check and, in the same change, the `bsvAuth`
+security scheme to that description; no release since has removed the
+check. So a description with both the commit route and `bsvAuth` is a
+build in the affected range. With `incumbent.chirp_commit` `probe` (the
+default):
+
+- a build in the affected range is refused: nothing is uploaded or paid,
+  and the front tries again later;
+- a description that cannot be read (no answer, a 5xx, not JSON) is not
+  taken as a clean build: nothing is paid until it can be read;
+- a 404 (no description) or a description without `bsvAuth` is a build
+  before the range, and commits go ahead. A reverse proxy in front of the
+  incumbent that does not pass `/chirp/v1/openapi.json` hides the build:
+  pass it.
+
+Whatever the description says, a payment the incumbent took and then
+refused with its catch-all answer (a commit's 400 `ERR_CHIRP_COMMIT`, a
+renewal's 500 `ERR_INTERNAL_RENEW`; the regression's answers, and the
+server names no more than that to the client) is recorded with the
+description's fingerprint (its SHA-256), and no commit or renewal is paid
+for again while the incumbent serves the same description and the bridge
+has not restarted. The catch-all also covers other failures after payment
+(a wallet or broadcast failure), so the record is held only until the
+operator restarts the bridge, which says it may be tried again.
+
+The upstream fix will not necessarily change the description, so the
+check cannot tell a fixed build in the range from an affected one. An
+operator whose incumbent runs a build with the fix (the upstream one when
+it ships, or the one-condition patch accepting
+`/chirp/v1/<root>/objects/<root>`) sets `incumbent.chirp_commit` to
+`trust` and restarts the bridge: the description is then not held against
+the incumbent. `bstore-bridge doctor` prints what the check finds
+(`chirp commit`).
 
 ## How it works
 
@@ -275,6 +319,7 @@ paid.
 | `incumbent.max_sats_per_gib_day`, `incumbent.min_payment` | `terms.renew_per_gib_day`, `terms.renew_minimum` | the cap on one commit or renewal: the larger of `min_payment` and this rate for each GiB a day, rounded up |
 | `incumbent.max_sats_per_day` | 1000000 | the most paid to the incumbent in any 24 hours |
 | `incumbent.ad_wait_seconds` | 300 | how long the incumbent's advertisement is looked for after a commit or renewal before the attempt fails and is tried again |
+| `incumbent.chirp_commit` | `probe` | `probe`: refuse, before paying, an incumbent build with the CHIRP commit location regression (from its API description, or from a paid commit it refused that way); `trust`: the operator states the build carries the fix (The commit build check) |
 | `statement_check_seconds` | 21600 | how often the front statement is looked for at each host |
 
 ## Operating

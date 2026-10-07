@@ -312,7 +312,7 @@ func (c *Client) Commit(ctx context.Context, s *Session, root [32]byte, maxPay u
 		return nil, paid, fmt.Errorf("commit: %w", err)
 	}
 	if call.Status != http.StatusCreated {
-		return nil, paid, fmt.Errorf("commit: %d %s", call.Status, firstLine(call.Body))
+		return nil, paid, &CommitError{Status: call.Status, Code: codeOf(call.Body), Text: firstLine(call.Body)}
 	}
 	var out Committed
 	if err := json.Unmarshal(call.Body, &out); err != nil {
@@ -320,6 +320,34 @@ func (c *Client) Commit(ctx context.Context, s *Session, root [32]byte, maxPay u
 	}
 	out.Paid = paid
 	return &out, paid, nil
+}
+
+// CommitError is a commit the incumbent answered with other than 201.
+type CommitError struct {
+	Status int
+	Code   string // the answer's error code, when it names one
+	Text   string
+}
+
+func (e *CommitError) Error() string { return fmt.Sprintf("commit: %d %s", e.Status, e.Text) }
+
+// RenewError is a renewal the incumbent answered with other than 200,
+// 404 or 410.
+type RenewError struct {
+	Status int
+	Code   string
+	Text   string
+}
+
+func (e *RenewError) Error() string { return fmt.Sprintf("renew: %d %s", e.Status, e.Text) }
+
+// codeOf is an error answer's code, or empty.
+func codeOf(body []byte) string {
+	var e struct {
+		Code string `json:"code"`
+	}
+	_ = json.Unmarshal(body, &e)
+	return e.Code
 }
 
 func paidOf(c *Call) uint64 {
@@ -350,7 +378,7 @@ func (c *Client) Renew(ctx context.Context, root [32]byte, minutes, maxPay uint6
 		return nil, paid, fmt.Errorf("renew: %d %s: %w", call.Status, firstLine(call.Body), ErrNotFound)
 	}
 	if call.Status != http.StatusOK {
-		return nil, paid, fmt.Errorf("renew: %d %s", call.Status, firstLine(call.Body))
+		return nil, paid, &RenewError{Status: call.Status, Code: codeOf(call.Body), Text: firstLine(call.Body)}
 	}
 	var out struct {
 		Status string `json:"status"`

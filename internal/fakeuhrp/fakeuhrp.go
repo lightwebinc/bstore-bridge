@@ -87,6 +87,14 @@ type Server struct {
 	// FailAfterPay takes a commit's payment and then answers 500, as a
 	// host that failed after charging does.
 	FailAfterPay bool
+	// LocationBug takes a commit's payment and then refuses it as
+	// uhrp-server-basic since ts-stack b3155fa2 does: 400 ERR_CHIRP_COMMIT,
+	// its generic commit refusal (the server logs "UHRP hosted file
+	// location is invalid").
+	LocationBug bool
+	// OpenAPI is the API description served at /chirp/v1/openapi.json
+	// without authentication; nil answers 404.
+	OpenAPI []byte
 	// Paid is every satoshi taken, Commits and Renewals what was done.
 	Paid               uint64
 	Commits, Renewals  int
@@ -160,6 +168,20 @@ func (s *Server) SetFailAfterPay(v bool) {
 	s.mu.Unlock()
 }
 
+// SetLocationBug sets LocationBug.
+func (s *Server) SetLocationBug(v bool) {
+	s.mu.Lock()
+	s.LocationBug = v
+	s.mu.Unlock()
+}
+
+// SetOpenAPI sets OpenAPI.
+func (s *Server) SetOpenAPI(doc []byte) {
+	s.mu.Lock()
+	s.OpenAPI = doc
+	s.mu.Unlock()
+}
+
 // Holds reports whether a root is committed, and its advertisement's
 // expiry.
 func (s *Server) Holds(root [32]byte) (bool, uint64) {
@@ -187,6 +209,16 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	auth := s.auth
 	s.mu.Unlock()
 	switch {
+	case p == "/chirp/v1/openapi.json" && r.Method == http.MethodGet:
+		s.mu.Lock()
+		doc := s.OpenAPI
+		s.mu.Unlock()
+		if doc == nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(doc)
 	case p == "/.well-known/auth":
 		auth.Handshake(w, r)
 	case strings.HasPrefix(p, "/chirp/v1/uploads"):
@@ -322,10 +354,13 @@ func (s *Server) commit(ctx context.Context, r *http.Request, body []byte, who *
 		return *rep
 	}
 	s.mu.Lock()
-	fail := s.FailAfterPay
+	fail, bug := s.FailAfterPay, s.LocationBug
 	s.mu.Unlock()
 	if fail {
 		return auth104.Error(http.StatusInternalServerError, "ERR_INTERNAL", "Internal error.")
+	}
+	if bug {
+		return auth104.Error(http.StatusBadRequest, "ERR_CHIRP_COMMIT", "CHIRP closure validation or advertisement failed.")
 	}
 	expiry := uint64(time.Now().Unix()) + sess.retention
 	ad, err := s.advertise(ctx, root, expiry, rootLen, nil)

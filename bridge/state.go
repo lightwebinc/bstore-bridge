@@ -29,8 +29,12 @@ type state struct {
 	Statements map[string]*statementRec `json:"statements"`
 	// Paid is every satoshi paid to the incumbent, commits and renewals;
 	// Spends are the last day's payments, for the daily budget.
-	Paid   uint64  `json:"paid"`
-	Spends []spend `json:"spends,omitempty"`
+	// CommitBroken is a paid commit the incumbent refused with the CHIRP
+	// commit location regression: no commit is paid for again while the
+	// incumbent's build is the same (incumbent.chirp_commit).
+	CommitBroken *commitBroken `json:"commitBroken,omitempty"`
+	Paid         uint64        `json:"paid"`
+	Spends       []spend       `json:"spends,omitempty"`
 }
 
 // spend is one payment to the incumbent.
@@ -56,6 +60,13 @@ type rootRec struct {
 	// expiry.
 	Ad     string `json:"ad,omitempty"`
 	Expiry uint64 `json:"expiry,omitempty"`
+}
+
+// commitBroken is a commit refusal that names the build it came from.
+type commitBroken struct {
+	Build string `json:"build"` // the API description's fingerprint; empty when none was read
+	At    int64  `json:"at"`
+	Why   string `json:"why"`
 }
 
 // statementRec is a front statement published for a bucket: its carrier,
