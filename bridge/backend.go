@@ -517,7 +517,7 @@ func (b *Backend) commitGate(ctx context.Context, renew bool) (string, error) {
 	}
 	b.mu.Lock()
 	br := b.st.CommitBroken
-	if br != nil && (br.Build != bld.Fingerprint || time.Unix(br.At, 0).Before(b.started)) {
+	if br != nil && (br.Build != bld.Fingerprint || br.At < b.started.Unix()) {
 		// Another build, or a refusal from before the operator restarted
 		// the bridge: the refusal code is the incumbent's catch-all, so a
 		// transient failure on a clean build latches too, and a restart is
