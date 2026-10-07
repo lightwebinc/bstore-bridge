@@ -34,7 +34,7 @@ jobs:
         run: make vet
       # The direct dependencies are exactly go-sdk, bcommon and bstore,
       # go.mod is tidy, nothing is replaced, and go-sdk resolves to exactly
-      # v1.5.2.
+      # v1.7.1.
       - name: dependency set
         run: make deps-check
       # LICENSE-THIRD-PARTY matches what the binaries link.
