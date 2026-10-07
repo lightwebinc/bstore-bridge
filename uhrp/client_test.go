@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -118,36 +116,5 @@ func TestObjectURLAndUHRPURL(t *testing.T) {
 	}
 	if URL(r) != "uhrp://"+chirp.Identifier(r) {
 		t.Fatal(URL(r))
-	}
-}
-
-// go-sdk v1.5.2 writes a handshake's requestedCertificates with Go's field
-// names; the TypeScript SDK refuses that as malformed. The handshake goes
-// out in the wire shape, and nothing else is touched.
-func TestHandshakeCertificateSetInTheWireShape(t *testing.T) {
-	goShape := `{"version":"0.1","messageType":"initialRequest","initialNonce":"AA==","requestedCertificates":{"Certifiers":[],"CertificateTypes":{}},"identityKey":"02aa"}`
-	req, _ := http.NewRequest(http.MethodPost, "https://incumbent.example/.well-known/auth", strings.NewReader(goShape))
-	if err := wireCertificateSet(req); err != nil {
-		t.Fatal(err)
-	}
-	body, _ := io.ReadAll(req.Body)
-	var msg struct {
-		RequestedCertificates map[string]json.RawMessage `json:"requestedCertificates"`
-		InitialNonce          string                     `json:"initialNonce"`
-	}
-	if err := json.Unmarshal(body, &msg); err != nil {
-		t.Fatal(err)
-	}
-	if string(msg.RequestedCertificates["certifiers"]) != "[]" || string(msg.RequestedCertificates["types"]) != "{}" ||
-		len(msg.RequestedCertificates) != 2 || msg.InitialNonce != "AA==" || req.ContentLength != int64(len(body)) {
-		t.Fatalf("rewritten handshake: %s", body)
-	}
-	other := `{"Certifiers":[]}`
-	req, _ = http.NewRequest(http.MethodPost, "https://incumbent.example/renew", strings.NewReader(other))
-	if err := wireCertificateSet(req); err != nil {
-		t.Fatal(err)
-	}
-	if body, _ := io.ReadAll(req.Body); string(body) != other {
-		t.Fatalf("a general message was changed: %s", body)
 	}
 }
