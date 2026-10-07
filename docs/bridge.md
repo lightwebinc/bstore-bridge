@@ -63,7 +63,8 @@ default):
 - a build in the affected range is refused: nothing is uploaded or paid,
   and the front tries again later;
 - a description that cannot be read (no answer, a 5xx, not JSON) is not
-  taken as a clean build: nothing is paid until it can be read;
+  taken as a clean build: no commit is paid for until it can be read (a
+  renewal goes ahead, so a lease does not lapse for it);
 - a 404 (no description) or a description without `bsvAuth` is a build
   before the range, and commits go ahead. A reverse proxy in front of the
   incumbent that does not pass `/chirp/v1/openapi.json` hides the build:
@@ -71,7 +72,7 @@ default):
 
 Whatever the description says, a payment the incumbent took and then
 refused with its catch-all answer (a commit's 400 `ERR_CHIRP_COMMIT`, a
-renewal's 500 `ERR_INTERNAL_RENEW`; the regression's answers, and the
+renewal's 500 `ERR_INTERNAL_RENEW` or 404 `ERR_OLD_ADVERTISEMENT_NOT_FOUND`; the regression's answers, and the
 server names no more than that to the client) is recorded with the
 description's fingerprint (its SHA-256), and no commit or renewal is paid
 for again while the incumbent serves the same description and the bridge

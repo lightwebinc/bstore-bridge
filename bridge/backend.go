@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -406,14 +407,14 @@ func (b *Backend) Advertise(ctx context.Context, root [32]byte, until uint64) (*
 		// A renewal re-signs the advertisement's metadata, CHIRP location
 		// and all: a build with the regression takes the payment and
 		// refuses it as it refuses a commit.
-		build, err := b.commitGate(ctx)
+		build, err := b.commitGate(ctx, true)
 		if err != nil {
 			return nil, err
 		}
 		b.pending(rec, until, 0)
 		r, paid, err := b.inc.Renew(ctx, root, minutes, cap)
 		b.paid(rec, paid)
-		if err != nil && paid > 0 && uhrp.RenewFailedAfterPayment(err) {
+		if err != nil && paid > 0 && (uhrp.RenewFailedAfterPayment(err) || strings.Contains(err.Error(), "ERR_OLD_ADVERTISEMENT_NOT_FOUND")) {
 			b.noteBroken(root, build, paid, err)
 		}
 		switch {
@@ -449,7 +450,7 @@ func (b *Backend) commit(ctx context.Context, root [32]byte, rec *rootRec, objs 
 	if err := b.budget(cap); err != nil {
 		return nil, err
 	}
-	build, err := b.commitGate(ctx)
+	build, err := b.commitGate(ctx, false)
 	if err != nil {
 		return nil, err
 	}
@@ -503,11 +504,13 @@ func (b *Backend) commit(ctx context.Context, root [32]byte, rec *rootRec, objs 
 // with the upstream commit location regression is refused under "probe";
 // so, under either setting, is a build that already refused a paid commit
 // that way (under "trust", only a refusal since the bridge started).
-func (b *Backend) commitGate(ctx context.Context) (string, error) {
+func (b *Backend) commitGate(ctx context.Context, renew bool) (string, error) {
 	trust := b.icfg.CHIRPCommit == "trust"
 	bld, err := b.inc.Build(ctx)
 	if err != nil {
-		if !trust {
+		// A renewal is not held up by a description that cannot be read:
+		// a lease left to lapse costs more than one refused renewal.
+		if !trust && !renew {
 			return "", fmt.Errorf("the incumbent's build could not be checked (%v): nothing is paid until it is; tried again later", err)
 		}
 		bld = &uhrp.Build{}
