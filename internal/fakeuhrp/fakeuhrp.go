@@ -93,8 +93,9 @@ type Server struct {
 	// location is invalid").
 	LocationBug bool
 	// OpenAPI is the API description served at /chirp/v1/openapi.json
-	// without authentication; nil answers 404.
-	OpenAPI []byte
+	// without authentication; nil answers 404. OpenAPIFail answers 503.
+	OpenAPI     []byte
+	OpenAPIFail bool
 	// Paid is every satoshi taken, Commits and Renewals what was done.
 	Paid               uint64
 	Commits, Renewals  int
@@ -182,6 +183,13 @@ func (s *Server) SetOpenAPI(doc []byte) {
 	s.mu.Unlock()
 }
 
+// SetOpenAPIFail makes the API description answer 503, or not.
+func (s *Server) SetOpenAPIFail(fail bool) {
+	s.mu.Lock()
+	s.OpenAPIFail = fail
+	s.mu.Unlock()
+}
+
 // Holds reports whether a root is committed, and its advertisement's
 // expiry.
 func (s *Server) Holds(root [32]byte) (bool, uint64) {
@@ -211,8 +219,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case p == "/chirp/v1/openapi.json" && r.Method == http.MethodGet:
 		s.mu.Lock()
-		doc := s.OpenAPI
+		doc, fail := s.OpenAPI, s.OpenAPIFail
 		s.mu.Unlock()
+		if fail {
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+			return
+		}
 		if doc == nil {
 			http.NotFound(w, r)
 			return

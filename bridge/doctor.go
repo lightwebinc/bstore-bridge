@@ -21,7 +21,10 @@ func buildNote(ctx context.Context, hc *http.Client, i *Incumbent) string {
 	b, err := uhrp.ProbeBuild(ctx, hc, i.URL)
 	switch {
 	case err != nil:
-		return fmt.Sprintf("the build could not be checked (%v): commits are not paid for until it can (chirp_commit %s)", err, i.CHIRPCommit)
+		if i.CHIRPCommit == "trust" {
+			return fmt.Sprintf("the build could not be checked (%v); chirp_commit trust: commits and renewals go ahead", err)
+		}
+		return fmt.Sprintf("the build could not be checked (%v): commits are not paid for until it can, renewals go ahead (chirp_commit %s)", err, i.CHIRPCommit)
 	case b.Affected && i.CHIRPCommit == "trust":
 		return fmt.Sprintf("a build of ts-stack b3155fa2 or later (%s); chirp_commit trust: the operator states it carries the commit location fix", b.Fingerprint[:12])
 	case b.Affected:

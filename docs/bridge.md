@@ -72,11 +72,15 @@ default):
 
 Whatever the description says, a payment the incumbent took and then
 refused with its catch-all answer (a commit's 400 `ERR_CHIRP_COMMIT`, a
-renewal's 500 `ERR_INTERNAL_RENEW` or 404 `ERR_OLD_ADVERTISEMENT_NOT_FOUND`; the regression's answers, and the
-server names no more than that to the client) is recorded with the
-description's fingerprint (its SHA-256), and no commit or renewal is paid
-for again while the incumbent serves the same description and the bridge
-has not restarted. The catch-all also covers other failures after payment
+renewal's 500 `ERR_INTERNAL_RENEW`, or its 404 from a build the
+description names as affected; the regression's answers, and the server
+names no more than that to the client) is recorded with the description's
+fingerprint (its SHA-256), and no commit or renewal is paid for again
+while the incumbent serves the same description and the bridge has not
+restarted. A description that cannot be read, when the payment was refused
+or later, does not clear the record. A renewal's 404 from any other build
+is an advertisement the incumbent's lookup does not show yet: only that
+root waits (a day) before it is paid for again. The catch-all also covers other failures after payment
 (a wallet or broadcast failure), so the record is held only until the
 operator restarts the bridge, which says it may be tried again.
 
@@ -259,11 +263,13 @@ on the buckets it subscribes to.
   residue: it carries nothing secret and its answer is discarded.
 - **What the bridge fetches.** Only URLs built from its configuration and
   a hash: the incumbent's base URL with a root and an object identifier,
-  the configured lookup hosts, and the configured overlay hosts. Nothing a
-  request, an advertisement, a lookup answer or a front statement names is
-  fetched. Redirects are not followed; every answer is bounded (4 MiB and
-  a margin for an object, 64 KiB for a JSON answer, 4 MiB for a lookup
-  answer); requests time out. The incumbent may be on a private address,
+  or with the fixed path `/chirp/v1/openapi.json` (the commit build
+  check), the configured lookup hosts, and the configured overlay hosts.
+  Nothing a request, an advertisement, a lookup answer or a front
+  statement names is fetched. Redirects are not
+  followed; every answer is bounded (4 MiB and a margin for an object,
+  64 KiB for a JSON answer, 4 MiB for a lookup answer, 1 MiB for the API
+  description); requests time out. The incumbent may be on a private address,
   since it is the operator's own configuration.
 - **What the bridge mirrors.** Only an advertisement by the configured
   incumbent key, for a root whose closure the front checked and took for

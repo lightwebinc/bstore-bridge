@@ -595,3 +595,31 @@ func TestBackendRefusesTheCommitLocationRegression(t *testing.T) {
 		t.Fatalf("an affected build's renewal: %v, paid %d then %d", err, paid, r.fake.Paid)
 	}
 }
+
+// A recorded refusal stands while the description cannot be read, and a
+// description read after one recorded without it is not "another build":
+// neither a renewal nor, under trust, a commit is paid for.
+func TestCommitRefusalSurvivesAnUnreadableDescription(t *testing.T) {
+	r := newRig(t)
+	icfg := r.incumbent()
+	for _, mode := range []string{"probe", "trust"} {
+		c := *icfg
+		c.CHIRPCommit = mode
+		b := r.backend(filepath.Join(t.TempDir(), mode), &c, map[[32]byte][]byte{})
+		b.st.CommitBroken = &commitBroken{Build: "a1", At: b.now().Unix(), Why: "refused"}
+		r.fake.SetOpenAPIFail(true)
+		if _, _, err := b.commitGate(r.ctx, true); !errors.Is(err, ErrIncumbentBuild) || b.st.CommitBroken == nil {
+			t.Fatalf("%s: a renewal with the description unreadable: %v", mode, err)
+		}
+		r.fake.SetOpenAPIFail(false)
+		r.fake.SetOpenAPI(nil)
+		b.st.CommitBroken = &commitBroken{Build: "", At: b.now().Unix(), Why: "refused"}
+		if _, _, err := b.commitGate(r.ctx, true); !errors.Is(err, ErrIncumbentBuild) || b.st.CommitBroken == nil {
+			t.Fatalf("%s: a record without a description, then one read: %v", mode, err)
+		}
+		b.st.CommitBroken = &commitBroken{Build: "a1", At: b.now().Unix(), Why: "refused"}
+		if _, _, err := b.commitGate(r.ctx, true); err != nil || b.st.CommitBroken != nil {
+			t.Fatalf("%s: another build read: %v", mode, err)
+		}
+	}
+}

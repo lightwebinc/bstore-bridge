@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -407,14 +406,18 @@ func (b *Backend) Advertise(ctx context.Context, root [32]byte, until uint64) (*
 		// A renewal re-signs the advertisement's metadata, CHIRP location
 		// and all: a build with the regression takes the payment and
 		// refuses it as it refuses a commit.
-		build, err := b.commitGate(ctx, true)
+		build, affected, err := b.commitGate(ctx, true)
 		if err != nil {
 			return nil, err
 		}
 		b.pending(rec, until, 0)
 		r, paid, err := b.inc.Renew(ctx, root, minutes, cap)
 		b.paid(rec, paid)
-		if err != nil && paid > 0 && (uhrp.RenewFailedAfterPayment(err) || strings.Contains(err.Error(), "ERR_OLD_ADVERTISEMENT_NOT_FOUND")) {
+		// A 404 after payment is the regression's answer only from a
+		// build the description names as affected (run under "trust"):
+		// elsewhere it is an advertisement the incumbent's lookup does not
+		// show yet, and that root alone waits (pendingHold).
+		if err != nil && paid > 0 && (uhrp.RenewFailedAfterPayment(err) || (affected && errors.Is(err, uhrp.ErrNotFound))) {
 			b.noteBroken(root, build, paid, err)
 		}
 		switch {
@@ -450,7 +453,7 @@ func (b *Backend) commit(ctx context.Context, root [32]byte, rec *rootRec, objs 
 	if err := b.budget(cap); err != nil {
 		return nil, err
 	}
-	build, err := b.commitGate(ctx, false)
+	build, _, err := b.commitGate(ctx, false)
 	if err != nil {
 		return nil, err
 	}
@@ -503,21 +506,27 @@ func (b *Backend) commit(ctx context.Context, root [32]byte, rec *rootRec, objs 
 // The incumbent's free API description names its build: one in the range
 // with the upstream commit location regression is refused under "probe";
 // so, under either setting, is a build that already refused a paid commit
-// that way (under "trust", only a refusal since the bridge started).
-func (b *Backend) commitGate(ctx context.Context, renew bool) (string, error) {
+// that way (under "trust", only a refusal since the bridge started). It
+// also returns whether the description names a build in the affected range.
+func (b *Backend) commitGate(ctx context.Context, renew bool) (string, bool, error) {
 	trust := b.icfg.CHIRPCommit == "trust"
 	bld, err := b.inc.Build(ctx)
+	probed := err == nil
 	if err != nil {
 		// A renewal is not held up by a description that cannot be read:
 		// a lease left to lapse costs more than one refused renewal.
 		if !trust && !renew {
-			return "", fmt.Errorf("the incumbent's build could not be checked (%v): nothing is paid until it is; tried again later", err)
+			return "", false, fmt.Errorf("the incumbent's build could not be checked (%v): nothing is paid until it is; tried again later", err)
 		}
 		bld = &uhrp.Build{}
 	}
 	b.mu.Lock()
 	br := b.st.CommitBroken
-	if br != nil && (br.Build != bld.Fingerprint || br.At < b.started.Unix()) {
+	// Only a description read now, against one read at the refusal, says
+	// the build changed: a failed read, then or now, says nothing, and the
+	// refusal stands.
+	changed := br != nil && probed && br.Build != "" && br.Build != bld.Fingerprint
+	if br != nil && (changed || br.At < b.started.Unix()) {
 		// Another build, or a refusal from before the operator restarted
 		// the bridge: the refusal code is the incumbent's catch-all, so a
 		// transient failure on a clean build latches too, and a restart is
@@ -529,14 +538,14 @@ func (b *Backend) commitGate(ctx context.Context, renew bool) (string, error) {
 	}
 	b.mu.Unlock()
 	if br != nil {
-		return "", fmt.Errorf("%w: the incumbent took a payment at %d and refused it (%s) and its build is unchanged; nothing is paid for a commit or renewal until it is upgraded or the bridge restarted (a build in the affected range: patched, with incumbent.chirp_commit set to trust)",
+		return "", false, fmt.Errorf("%w: the incumbent took a payment at %d and refused it (%s) and its build is unchanged; nothing is paid for a commit or renewal until it is upgraded or the bridge restarted (a build in the affected range: patched, with incumbent.chirp_commit set to trust)",
 			ErrIncumbentBuild, br.At, br.Why)
 	}
 	if bld.Affected && !trust {
-		return "", fmt.Errorf("%w: its API description (%s) is of ts-stack b3155fa2 or later, whose CHIRP commit fails after payment (server log %q); nothing is paid. Run a build with the fix and set incumbent.chirp_commit to trust",
+		return "", false, fmt.Errorf("%w: its API description (%s) is of ts-stack b3155fa2 or later, whose CHIRP commit fails after payment (server log %q); nothing is paid. Run a build with the fix and set incumbent.chirp_commit to trust",
 			ErrIncumbentBuild, uhrp.OpenAPIPath, uhrp.LocationBugText)
 	}
-	return bld.Fingerprint, nil
+	return bld.Fingerprint, bld.Affected, nil
 }
 
 // noteBroken records a payment the incumbent took and then refused the
