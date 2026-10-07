@@ -24,14 +24,19 @@ The command reads no environment variables.
 ## Networks and endpoints
 
 The `provider` block names the chain services, as for any bstore
-provider:
+provider (bstore `docs/configuration.md`, "Networks and chain services").
+None needs a node: on mainnet and testnet every chain key has a default.
 
 | Key | Values |
 | --- | --- |
-| `provider.mainnet` | `true` on mainnet (the fund address form); `false` for testnet and regtest |
-| `provider.node` | a Teranode asset API: proofs, spends, block hashes |
-| `provider.settle` | `arcade:<url>` (with `arcade_key`), `tcp:<host:port>`, or `rpc:<url>` (with `rpc_user`, `rpc_pass`) |
-| `provider.headers` | `woc:main`, `woc:test`, `chaintracks:<url>`, or a bridge URL |
+| `provider.mainnet` | `true` on mainnet (the fund address form and the defaults below); `false` for testnet and regtest |
+| `provider.chain` | the chain view (transactions, proofs, spends): `woc:main` or `woc:test` (WhatsOnChain, the default for the network), `asset:<url>` (a Teranode asset API), or a list such as `asset:<url>,woc:main`. `woc_key` and `woc_rate` are a WhatsOnChain API key and its requests a second (the free tier allows 3). A node is the better chain view: it removes WhatsOnChain's word that an output is unspent. The older key `provider.node` (a node's asset API URL) still works and means `asset:<url>`; set one of them |
+| `provider.settle` | default `arcade:main` or `arcade:test` (GorillaPool's public arcade); `arcade:<url>` (with `arcade_key`), `tcp:<host:port>`, or `rpc:<url>` (with `rpc_user`, `rpc_pass`) |
+| `provider.headers` | default `woc:main` or `woc:test`; `bhs:<url>` (with `headers_token`), `arcade:<url>`, `chaintracks:<url>`, or a bridge URL |
+
+A regtest chain you run has no public services: set `chain` (or `node`),
+`settle` and `headers`. `fund -blocks` and `rescan` read a node's blocks
+and need `chain asset:<url>` (or `node`) and `settle rpc:<url>`.
 
 ## bridge.json
 
@@ -50,9 +55,6 @@ paid.
     "data": "/var/lib/bstore-bridge",
     "listen": "127.0.0.1:8096",
     "public_url": "https://bridge.example.com/front",
-    "node": "https://node.example.com",
-    "settle": "arcade:https://arcade.example.com",
-    "headers": "woc:main",
     "mainnet": true,
     "hosts": ["https://overlay.example.com"],
     "buckets": [{"bucket": "example_photos_hmqzvtkwrx"}],

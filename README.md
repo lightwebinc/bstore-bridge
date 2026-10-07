@@ -48,9 +48,11 @@ $ bstore-bridge doctor -config bridge.json       # reads only: does everything a
 $ bstore-bridge run -config bridge.json
 ```
 
-`bridge.json` names the incumbent, its lookup hosts, the bucket, a node's
-asset API, an arcade settlement leg and `woc:main` as the header source,
-with `"mainnet": true`; testnet takes `woc:test` and `"mainnet": false`.
+`bridge.json` names the incumbent, its lookup hosts and the bucket, with
+`"mainnet": true` (`false` is testnet). No node is needed: the chain view
+and the header source default to WhatsOnChain and the settlement leg to
+GorillaPool's arcade. A node of your own (`"chain": "asset:<url>"`, or the
+older `node` key) is the better chain view.
 [docs/examples.md](docs/examples.md) has the whole file and every step.
 
 ## Documentation
@@ -73,7 +75,7 @@ $ make bstore-bridge     # bin/bstore-bridge
 $ make docker-build      # the image
 ```
 
-Go 1.27.1. The bridge pins bstore v0.8.0, bcommon v0.14.0 and go-sdk
+Go 1.27.1. The bridge pins bstore v0.9.0, bcommon v0.14.1 and go-sdk
 v1.7.1; bstore's tagged module is committed under `third_party/goproxy`
 (`make bstore-module` refreshes it), so a build needs no credentials.
 

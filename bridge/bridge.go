@@ -50,8 +50,8 @@ type Bridge struct {
 	inc  *uhrp.Client
 	hc   *http.Client
 
-	// chain is the chain view the bridge's own reads go to (a node's,
-	// the front's node); every proof is checked against hdrs.
+	// chain is the chain view the bridge's own reads go to, the front's
+	// (WhatsOnChain, or a node); every proof is checked against hdrs.
 	chain nodeapi.Chain
 	hdrs  *headers.Client
 
@@ -81,15 +81,12 @@ func Open(ctx context.Context, cfg *Config, opts Options) (*Bridge, error) {
 	if err != nil {
 		return nil, err
 	}
-	hdrs, err := headers.NewSource(cfg.Provider.Headers)
+	v, err := cfg.ChainView()
 	if err != nil {
 		return nil, err
 	}
-	chain, err := nodeapi.ParseChain("asset:"+cfg.Provider.Node, nodeapi.ChainOptions{Headers: hdrs})
-	if err != nil {
-		return nil, fmt.Errorf("provider.node: %w", err)
-	}
-	b := &Bridge{cfg: cfg, opts: opts, hc: hc, chain: chain, hdrs: hdrs}
+	hdrs := v.Headers
+	b := &Bridge{cfg: cfg, opts: opts, hc: hc, chain: v.Chain, hdrs: hdrs}
 	b.inc = &uhrp.Client{Base: cfg.Incumbent.URL, HTTP: hc, Identity: cfg.Incumbent.IdentityKey()}
 	logf := func(format string, args ...any) { opts.Logf("bstore-bridge: "+format, args...) }
 	be, err := newBackend(filepath.Join(cfg.Provider.Data, "bridge"), &cfg.Incumbent, b.inc, b.chain, hdrs, logf, opts.Now)

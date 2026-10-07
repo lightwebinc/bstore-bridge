@@ -68,7 +68,8 @@ records it as owed, keeping no bytes. The backend's `Advertise` then:
 The advertisement is then found on `ls_uhrp`: by the incumbent's identity
 key, the root, exactly the incumbent's CHIRP URL of the root and the root
 node's length, unexpired, mined with a proof that verifies in the bridge's
-own headers, and unspent by its node's positive evidence. A lookup that
+own headers, and unspent by the chain view's positive evidence (a node's,
+or WhatsOnChain's word). A lookup that
 fails is not taken as "no advertisement": nothing is paid on it, and the
 attempt is made again later. Before a commit or a renewal is sent it is
 recorded as pending; one that may have been paid (the incumbent answered

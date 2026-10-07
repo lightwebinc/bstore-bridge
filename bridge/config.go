@@ -17,6 +17,7 @@ import (
 
 	"github.com/lightwebinc/bcommon/guard"
 
+	"github.com/lightwebinc/bstore/chaincfg"
 	"github.com/lightwebinc/bstore/provider"
 	"github.com/lightwebinc/bstore/storerec"
 )
@@ -97,6 +98,21 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("config %s: %w", path, err)
 	}
 	return &c, nil
+}
+
+// ChainView opens the chain the front's configuration names: the chain
+// view, headers, settlement leg and fee policy. No node is needed: past
+// Check an unset chain is WhatsOnChain (woc:<network>), headers the same
+// and settlement GorillaPool's arcade. A node (chain asset:URL, or the
+// older node key) is still the better chain view. It reaches nothing.
+func (c *Config) ChainView() (*chaincfg.View, error) {
+	s := c.Provider.Spec()
+	s.RPCID = "bstore-bridge"
+	v, err := chaincfg.Open(s)
+	if err != nil {
+		return nil, fmt.Errorf("provider: %w", err)
+	}
+	return v, nil
 }
 
 // Check takes the defaults and refuses a configuration that cannot run.

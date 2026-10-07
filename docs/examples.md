@@ -11,9 +11,9 @@ flag, and [bridge.md](bridge.md) what the incumbent must serve.
 | --- | --- | --- |
 | An incumbent | a BRC-167 complete host with upload sessions, at a public `https` URL, and its identity key | the same, on testnet |
 | Its lookup | overlay hosts answering `ls_uhrp` that carry its advertisements | the same |
-| A node's asset API | a Teranode asset service you run or are given access to | the same, on testnet |
-| A settlement leg | `arcade:<url>` | the same, on testnet |
-| A header source | `woc:main` | `woc:test` |
+| A chain view | nothing: WhatsOnChain (`woc:main`) by default; a node's asset API (`chain: asset:<url>`) is the better one | the same (`woc:test`) |
+| A settlement leg | nothing: GorillaPool's arcade (`arcade:main`) by default | the same (`arcade:test`) |
+| A header source | nothing: `woc:main` by default | `woc:test` |
 | The bucket | its identifier, from the bucket's owner, and the hosts that carry it | the same |
 | Coin | 100,000 satoshis or more in your own wallet | testnet coin from your own testnet wallet |
 
@@ -44,9 +44,6 @@ identity 02...
     "data": "/var/lib/bstore-bridge",
     "listen": "127.0.0.1:8096",
     "public_url": "https://bridge.example.com/front",
-    "node": "https://node.example.com",
-    "settle": "arcade:https://arcade.example.com",
-    "headers": "woc:main",
     "mainnet": true,
     "hosts": ["https://overlay.example.com"],
     "buckets": [{"bucket": "example_photos_hmqzvtkwrx"}],
@@ -62,7 +59,13 @@ identity 02...
 }
 ```
 
-On testnet: `"headers": "woc:test"` and `"mainnet": false`.
+On testnet: `"mainnet": false`. No node is named: the chain view and the
+header source are WhatsOnChain and the settlement leg is GorillaPool's
+arcade. A node of your own is the better chain view (it removes
+WhatsOnChain's word that an output is unspent): add
+`"chain": "asset:https://node.example.com"` (the older `"node"` key still
+works). WhatsOnChain's free tier allows 3 requests a second; a busy bridge
+needs a `woc_key` (and `woc_rate`) or a node.
 
 ## 4. Fund it
 
@@ -95,7 +98,7 @@ against the header source, and one not mined yet is taken when every
 transaction it spends is proven (`-refuse-unmined` takes mined payments
 only), sent to the settlement leg, and held until it mines. By txid, the
 proof is checked against the header source and each output is asked of
-the node before it is pooled. A payment that pays the fund address nothing
+the chain view before it is pooled. A payment that pays the fund address nothing
 is refused. Importing the same payment twice adds nothing. The pool pays the incumbent's commit and renewal prices (capped
 by `max_sats_per_gib_day`, `min_payment` and `max_sats_per_day`) and the
 funding of the bridge's front statements.

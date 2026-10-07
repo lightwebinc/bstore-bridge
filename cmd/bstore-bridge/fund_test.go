@@ -15,6 +15,7 @@ import (
 	"github.com/lightwebinc/bcommon/goldentest"
 	"github.com/lightwebinc/bcommon/testchain"
 
+	"github.com/lightwebinc/bstore-bridge/bridge"
 	"github.com/lightwebinc/bstore/provider"
 )
 
@@ -26,9 +27,14 @@ func TestFund(t *testing.T) {
 	chain := testchain.New(700)
 	srv := httptest.NewServer(chain)
 	defer srv.Close()
-	f, err := newFunder(&provider.Config{Node: srv.URL, Settle: "rpc:" + srv.URL + "/rpc", Headers: srv.URL})
+	// An existing node key is still the chain view, asset:<node>.
+	cfg := &bridge.Config{Provider: provider.Config{Node: srv.URL, Settle: "rpc:" + srv.URL + "/rpc", Headers: srv.URL}}
+	v, err := cfg.ChainView()
 	if err != nil {
 		t.Fatal(err)
+	}
+	if v.ChainSpec != "asset:"+srv.URL || v.Asset == nil {
+		t.Fatalf("node key: chain %q", v.ChainSpec)
 	}
 	key := goldentest.FixedKey()
 	addr, _ := script.NewAddressFromPublicKey(key.PubKey(), false)
@@ -79,14 +85,14 @@ func TestFund(t *testing.T) {
 	if err := chain.Send(paid); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.txid(ctx, w, paid.TxID().String()); !errors.Is(err, bwallet.ErrUnmined) {
+	if _, err := v.FundTxid(ctx, w.Signer(), w.Pool, paid.TxID().String()); !errors.Is(err, bwallet.ErrUnmined) {
 		t.Fatalf("unmined: %v", err)
 	}
 	chain.Mine()
-	if res, err := f.txid(ctx, w, paid.TxID().String()); err != nil || res.added != 1 || res.sats != 20_000 || !res.mined {
+	if res, err := v.FundTxid(ctx, w.Signer(), w.Pool, paid.TxID().String()); err != nil || res.Added != 1 || res.Satoshis != 20_000 || !res.Mined {
 		t.Fatalf("by txid: %+v %v", res, err)
 	}
-	if res, err := f.beef(ctx, w, beefOf(paid), false); err != nil || res.added != 0 || res.held != 1 {
+	if res, err := v.FundBEEF(ctx, w.Signer(), w.Pool, beefOf(paid), false); err != nil || res.Added != 0 || res.Held != 1 {
 		t.Fatalf("again from BEEF: %+v %v", res, err)
 	}
 	other := build(coins[1], coins[1].Outputs[0].LockingScript)
@@ -94,18 +100,40 @@ func TestFund(t *testing.T) {
 		t.Fatal(err)
 	}
 	chain.Mine()
-	if _, err := f.txid(ctx, w, other.TxID().String()); !errors.Is(err, bwallet.ErrPaysNothing) {
+	if _, err := v.FundTxid(ctx, w.Signer(), w.Pool, other.TxID().String()); !errors.Is(err, bwallet.ErrPaysNothing) {
 		t.Fatalf("pays nothing: %v", err)
 	}
 	chain.SetHold(true)
 	unmined := build(coins[2], fund)
-	if _, err := f.beef(ctx, w, beefOf(unmined), true); !errors.Is(err, bwallet.ErrUnmined) {
+	if _, err := v.FundBEEF(ctx, w.Signer(), w.Pool, beefOf(unmined), true); !errors.Is(err, bwallet.ErrUnmined) {
 		t.Fatalf("unmined refused: %v", err)
 	}
-	if res, err := f.beef(ctx, w, beefOf(unmined), false); err != nil || res.added != 1 || res.mined {
+	if res, err := v.FundBEEF(ctx, w.Signer(), w.Pool, beefOf(unmined), false); err != nil || res.Added != 1 || res.Mined {
 		t.Fatalf("unmined from BEEF: %+v %v", res, err)
 	}
 	if chain.Waiting() != 1 || len(w.Pool.UnprovenTxids()) != 1 {
 		t.Fatalf("waiting %d, unproven %v", chain.Waiting(), w.Pool.UnprovenTxids())
+	}
+}
+
+// With no chain, node, settle or headers, the bridge needs no node: the
+// configuration's checked defaults are WhatsOnChain and GorillaPool's arcade.
+func TestChainViewNodeless(t *testing.T) {
+	for _, tc := range []struct {
+		mainnet bool
+		net     string
+	}{{false, "test"}, {true, "main"}} {
+		cfg := &bridge.Config{Provider: provider.Config{Mainnet: tc.mainnet}}
+		s := cfg.Provider.Spec()
+		if err := s.Check(); err != nil {
+			t.Fatal(err)
+		}
+		v, err := cfg.ChainView()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if v.ChainSpec != "woc:"+tc.net || v.HeadersSpec != "woc:"+tc.net || v.Asset != nil || v.Arcade == nil || v.Settler == nil {
+			t.Fatalf("%s: chain %q headers %q settle %q asset %v", tc.net, v.ChainSpec, v.HeadersSpec, v.SettleSpec, v.Asset)
+		}
 	}
 }

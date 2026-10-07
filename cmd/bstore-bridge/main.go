@@ -31,13 +31,12 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
 	"github.com/lightwebinc/bcommon/bwallet"
-	"github.com/lightwebinc/bcommon/nodeapi"
 
 	"github.com/lightwebinc/bstore-bridge/bridge"
+	"github.com/lightwebinc/bstore/chaincfg"
 	"github.com/lightwebinc/bstore/provider"
 )
 
@@ -67,14 +66,14 @@ commands:
                                  one not mined yet waits in the pool until it mines, unless
                                  -refuse-unmined (mainnet, testnet)
   fund -config FILE -txid TXID   import a mined payment you sent to the fund address: every
-                                 output paying it that the node shows unspent, its proof checked
+                                 output paying it that the chain view shows unspent, its proof checked
                                  against the header source (mainnet, testnet)
   rescan -config FILE -from H [-to H]
                                  coinbase: only on a regtest chain you run (development and tests);
                                  take coinbase paying the fund address in blocks H.. into the pool
   fund -config FILE -blocks N    coinbase: only on a regtest chain you run (development and tests);
                                  mine N blocks to the fund address through the node's RPC
-                                 (settle rpc:<url>) and pool the coinbase
+                                 (settle rpc:<url>, chain asset:<url>) and pool the coinbase
   run -config FILE               serve until interrupted
   payouts -config FILE           print the settlements forwarded for the incumbent, one JSON object a line
   claim -remittances FILE -key-file F
@@ -197,49 +196,51 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
-		f, err := newFunder(pc)
+		v, err := cfg.ChainView()
 		if err != nil {
 			return usageError{err}
 		}
 		if args[0] == "fund" && (*txid != "" || *beef != "") {
-			var res funded
+			var res chaincfg.Funded
 			if *txid != "" {
-				res, err = f.txid(ctx, w, *txid)
+				res, err = v.FundTxid(ctx, w.Signer(), w.Pool, *txid)
 			} else {
-				raw, rerr := readBEEF(*beef)
+				raw, rerr := chaincfg.ReadBEEF(*beef, os.Stdin)
 				if rerr != nil {
 					return usageError{rerr}
 				}
-				res, err = f.beef(ctx, w, raw, *refuse)
+				res, err = v.FundBEEF(ctx, w.Signer(), w.Pool, raw, *refuse)
 			}
 			if err != nil {
 				return err
 			}
-			fmt.Println(res)
+			fmt.Println(fundedLine(res))
 			fmt.Printf("pool %d output(s), %d satoshis\n", w.Pool.Count(), w.Pool.Balance())
 			return nil
 		}
-		asset := &nodeapi.Asset{Base: pc.Node}
+		// Coinbase funding and a rescan read a node's blocks: a regtest
+		// chain you run, with chain asset:<url> (or node) and settle
+		// rpc:<url>.
+		asset := v.Asset
 		if args[0] == "fund" {
-			kind, addr, _ := strings.Cut(pc.Settle, ":")
-			if kind != "rpc" || *blocks < 1 {
-				return usageError{errors.New("fund needs -beef FILE or -txid TXID, or (coinbase: only on a regtest chain you run) settle rpc:<url> and -blocks N")}
+			if v.RPC == nil || asset == nil || *blocks < 1 {
+				return usageError{errors.New("fund needs -beef FILE or -txid TXID, or (coinbase: only on a regtest chain you run) settle rpc:<url>, chain asset:<url> and -blocks N")}
 			}
-			rpc := &nodeapi.RPC{URL: addr, User: pc.RPCUser, Pass: pc.RPCPass, ID: "bstore-bridge"}
-			n, _, err := bwallet.FundFromCoinbase(ctx, w.Signer(), w.Pool, rpc, asset, *blocks, 50)
+			n, _, err := bwallet.FundFromCoinbase(ctx, w.Signer(), w.Pool, v.RPC, asset, *blocks, 50)
 			if err != nil {
 				return err
 			}
 			fmt.Printf("%d coinbase output(s) pooled; pool %d satoshis\n", n, w.Pool.Balance())
 			return nil
 		}
+		if asset == nil {
+			return usageError{errors.New("rescan reads a node's blocks: only with chain asset:<url> (or node)")}
+		}
 		top := uint32(*to)
 		if top == 0 {
-			h, err := f.headers.CurrentHeight(ctx)
-			if err != nil {
+			if top, err = v.Tip.CurrentHeight(ctx); err != nil {
 				return err
 			}
-			top = h
 		}
 		n, err := bwallet.Rescan(ctx, w.Signer(), w.Pool, asset, uint32(*from), top)
 		if err != nil {
