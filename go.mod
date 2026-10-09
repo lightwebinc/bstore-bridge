@@ -1,11 +1,11 @@
 module github.com/lightwebinc/bstore-bridge
 
-go 1.27.1
+go 1.27.2
 
 require (
 	github.com/bsv-blockchain/go-sdk v1.7.1
-	github.com/lightwebinc/bcommon v0.19.0
-	github.com/lightwebinc/bstore v0.9.4
+	github.com/lightwebinc/bcommon v0.22.0
+	github.com/lightwebinc/bstore v0.10.1
 )
 
 require (
