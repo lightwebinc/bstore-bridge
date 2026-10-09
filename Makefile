@@ -57,7 +57,8 @@ deps-check:
 	if [ "$$sdk" != "$(DEPS_SDK)" ]; then echo "deps-check: go-sdk must resolve to exactly $(lastword $(DEPS_SDK)), found: $$sdk"; exit 1; fi
 
 # Refresh third_party/goproxy from the repository at the tag go.mod pins
-# (needs credentials for the private repository).
+# (needs credentials for the private repository), and remove every older
+# tag's files: the mirror holds only what go.mod needs.
 bstore-module:
 	@set -eu; v=$$(GOWORK=off go list -m -f '{{.Version}}' $(BSTORE)); \
 	tmp=$$(mktemp -d); trap 'chmod -R u+w "$$tmp"; rm -rf "$$tmp"' EXIT; \
@@ -65,6 +66,7 @@ bstore-module:
 	src=$$tmp/cache/download/$(BSTORE)/@v; dst=third_party/goproxy/$(BSTORE)/@v; \
 	mkdir -p $$dst; cp $$src/$$v.mod $$src/$$v.zip $$dst/; \
 	GOWORK=off GOFLAGS=-mod=mod GOMODCACHE=$$tmp GOPROXY=direct GONOSUMDB=$(BSTORE) go list -m -f '{"Version":"{{.Version}}","Time":"{{.Time.UTC.Format "2006-01-02T15:04:05Z"}}"}' $(BSTORE)@$$v > $$dst/$$v.info; \
+	find $$dst -maxdepth 1 -type f ! -name "$$v.*" ! -name list -delete; \
 	ls $$dst | sed -n 's/\.zip$$//p' > $$dst/list; \
 	echo "bstore-module: $$v in $$dst"
 
