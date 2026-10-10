@@ -75,7 +75,7 @@ $ make bstore-bridge     # bin/bstore-bridge
 $ make docker-build      # the image
 ```
 
-Go 1.27.2. The bridge pins bstore v0.10.1, bcommon v0.22.0 and go-sdk
+Go 1.27.2. The bridge pins bstore v0.10.3, bcommon v0.23.0 and go-sdk
 v1.7.1; bstore's tagged module is committed under `third_party/goproxy`
 (`make bstore-module` refreshes it), so a build needs no credentials.
 
