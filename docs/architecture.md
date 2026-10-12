@@ -21,6 +21,11 @@ flowchart LR
   R["reader / writer's race"] -->|"challenge, renewal"| F
   R -->|"sampled bytes"| I
   F -.->|"remittances.jsonl"| O["incumbent's operator<br/>bstore-bridge claim"]
+  %% The last node is an invisible spacer in the rightmost rank: the rendered
+  %% viewer places its zoom and pan controls over the bottom-right corner.
+  I ~~~ pad
+  pad["&nbsp;<br/>&nbsp;<br/>&nbsp;<br/>&nbsp;<br/>&nbsp;"]:::pad
+  classDef pad fill:none,stroke:none,color:transparent
 ```
 
 ## The code
