@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   go:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, lax]
     # bstore is a private module this job has no credentials for. Its tagged
     # archive is in third_party/goproxy and is served as a file proxy ahead
     # of the public one; go.sum holds the tag's hashes, so the copy is
