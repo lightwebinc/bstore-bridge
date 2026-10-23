@@ -23,7 +23,7 @@
 # The incumbent's key never belongs in this image or its volume: `claim`
 # is run where that key is.
 
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:738d1cf061836894ff6bb8c33881080ac66de8cf0586615012a0c8f592649cfa AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c AS builder
 RUN apk add --no-cache git ca-certificates
 WORKDIR /src
 ENV GOWORK=off \
