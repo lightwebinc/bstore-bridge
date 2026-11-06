@@ -14,15 +14,7 @@ permissions:
 
 jobs:
   go:
-    runs-on: [self-hosted, lax]
-    # bstore is a private module this job has no credentials for. Its tagged
-    # archive is in third_party/goproxy and is served as a file proxy ahead
-    # of the public one; go.sum holds the tag's hashes, so the copy is
-    # checked. The Makefile sets the same three for its own targets.
-    env:
-      GOPROXY: file://${{ github.workspace }}/third_party/goproxy,https://proxy.golang.org,direct
-      GONOPROXY: none
-      GONOSUMDB: github.com/lightwebinc/bstore
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0

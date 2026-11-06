@@ -4,11 +4,6 @@
 #
 #   docker build -t ghcr.io/lightwebinc/bstore-bridge .
 #
-# bstore is a private module. Its tagged archive is in third_party/goproxy
-# and is served to the go command as a file proxy, ahead of the public one,
-# as the Makefile does; go.sum holds the tag's hashes, so the copy is
-# checked. The build needs no credentials.
-#
 # No ENV defaults are baked in: the incumbent, its lookup hosts, the node,
 # the settlement leg and the overlay hosts are addresses of somebody's
 # deployment. Pass them in the configuration file (docs/bridge.md),
@@ -26,13 +21,9 @@
 FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb AS builder
 RUN apk add --no-cache git ca-certificates
 WORKDIR /src
-ENV GOWORK=off \
-    GOPROXY=file:///src/third_party/goproxy,https://proxy.golang.org,direct \
-    GONOPROXY=none \
-    GONOSUMDB=github.com/lightwebinc/bstore
+ENV GOWORK=off
 
 COPY go.mod go.sum ./
-COPY third_party/goproxy ./third_party/goproxy
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
