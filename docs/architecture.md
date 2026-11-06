@@ -36,7 +36,6 @@ flowchart LR
 | `bridge` | the configuration, the bridge backend behind bstore's provider front, its state, the settlement forwarding and `claim`, `doctor` |
 | `uhrp` | the incumbent client: BRC-104 sessions, BRC-105 payments, upload sessions, commits, `/renew`, the object route, `ls_uhrp` lookups, the commit build check |
 | `internal/fakeuhrp` | the stand-in incumbent the tests run against |
-| `third_party/goproxy` | bstore's tagged module archive, served as a file proxy until bstore's repository is public |
 
 The front is bstore's `provider` package; everything a native provider
 checks (carriers, funding, closures, the proof root, the hold policy, the

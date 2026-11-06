@@ -115,6 +115,5 @@ read-only, for example at `/etc/bstore-bridge/bridge.json`, and set
 (`.github/workflows/image-publish.yml`) once a release is tagged; until
 then build it with `make docker-build` or `docker build .`.
 
-The build itself takes bstore from `third_party/goproxy` (`GOPROXY`,
-`GONOPROXY`, `GONOSUMDB` are set in the Dockerfile and the Makefile), so
-it needs no credentials.
+The build takes every module from the public Go module proxy and needs no
+credentials.
