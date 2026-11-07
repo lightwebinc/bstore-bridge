@@ -127,7 +127,7 @@ incumbent does with an HTTP `Range`: it asks for the last 4 KiB of the
 closure's largest object and compares it with the same bytes of the whole
 object, held to its hash.
 
-- **Honoured:** a sample costs one 4 KiB read, for the bridge and for every
+- **Honored:** a sample costs one 4 KiB read, for the bridge and for every
   buyer.
 - **Ignored** (the incumbent answers 200 with the whole object): a sample
   costs its whole blob, up to 4 MiB, for the bridge and for every buyer;

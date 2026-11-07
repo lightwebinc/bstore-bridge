@@ -184,7 +184,8 @@ The image carries the bridge alone, its data directory
 licenses. With `listen` at `0.0.0.0:8096` in the configuration, put a TLS
 proxy in front as above (or set `tls_cert` and `tls_key`). `claim` belongs
 where the incumbent's key is, never in the bridge's container. The image is
-not published yet: build it from a checkout.
+published by the workflow [configuration.md](configuration.md#container-image)
+names; otherwise build it from a checkout.
 
 ## Testing
 

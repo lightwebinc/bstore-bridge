@@ -24,7 +24,7 @@ The command reads no environment variables.
 ## Networks and endpoints
 
 The `provider` block names the chain services, as for any bstore
-provider (bstore `docs/configuration.md`, "Networks and chain services").
+provider (bstore `docs/configuration.md`, "Networks and endpoints").
 None needs a node: on mainnet and testnet every chain key has a default.
 
 | Key | Values |
@@ -84,9 +84,9 @@ paid.
 The `provider` block's other keys (`listen`, `tls_cert`, `tls_key`,
 `public_url`, `hosts`, `facade`, `uhrp_topic`, `buckets`, `backend`,
 `quota_bytes`, `unclaimed_bytes`, `unclaimed_seconds`, `policy.*`,
-`terms.*`, `limits.*`, `tree_count`, `tree_sats`, `fee_sat_per_byte`,
-`fee_floor`, `trusted_proxies`, `metrics_listen` and the `accept_`
-keys) are bstore's provider configuration, with their defaults, in bstore's
+`terms.*`, `limits.*`, `tree_count`, `tree_sats`, `fee`, `fee_sat_per_byte`,
+`fee_floor`, `refuse_unmined`, `trusted_proxies`, `feeders`, `feed_listen`,
+`metrics_listen`, `pprof_listen` and the `accept_` keys) are bstore's provider configuration, with their defaults, in bstore's
 [docs/provider.md](https://github.com/lightwebinc/bstore/blob/main/docs/provider.md#configure).
 
 ## The data directory
