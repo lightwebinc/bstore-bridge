@@ -4,8 +4,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/lightwebinc/bcommon v0.33.13 h1:DvOFeP2c2gFMPjLsnNgd/qrPwVMpwQ8/pAqAizi1zYM=
 github.com/lightwebinc/bcommon v0.33.13/go.mod h1:2ADWFeGvzC0o0MgYFSzY4YJRP9JzJDCGEWOZYHVJkLU=
-github.com/lightwebinc/bstore v0.25.2 h1:1H41ra+fN2wifriImsPv6Vj5Twf6ziH+51ywCl4vt0k=
-github.com/lightwebinc/bstore v0.25.2/go.mod h1:JUxb5ekrIHBj27f+qhDQVu/HirUDRDI3wEGAJNMPyEw=
+github.com/lightwebinc/bstore v0.26.1 h1:loH9jwAe7mBdpQxfhNYByecwGvlyE4PWcQXbK1gNM5g=
+github.com/lightwebinc/bstore v0.26.1/go.mod h1:JUxb5ekrIHBj27f+qhDQVu/HirUDRDI3wEGAJNMPyEw=
 github.com/mrz1836/go-whatsonchain v1.3.0 h1:uOq5mHPTMUfiyMAFv+wqRgZXZ5L3CrObaIdShnX/yzU=
 github.com/mrz1836/go-whatsonchain v1.3.0/go.mod h1:SAMQltVzWjjBSSIM9KBoLRTFuv9fIrejyEUK95qPDZI=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
