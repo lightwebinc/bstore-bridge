@@ -34,10 +34,10 @@ func TestDocumentedVersionsMatchThePins(t *testing.T) {
 		re   *regexp.Regexp
 		want string
 	}{
-		{"go-sdk", regexp.MustCompile(`go-sdk\x60? (v\d+\.\d+\.\d+)`), req["github.com/bsv-blockchain/go-sdk"]},
-		{"bcommon", regexp.MustCompile(`bcommon\x60? (v\d+\.\d+\.\d+)`), req["github.com/lightwebinc/bcommon"]},
-		{"bstore", regexp.MustCompile(`\bbstore\x60? (v\d+\.\d+\.\d+)`), req["github.com/lightwebinc/bstore"]},
-		{"Go", regexp.MustCompile(`\bGo (1\.\d+)\b`), regexp.MustCompile(`^\d+\.\d+`).FindString(goVer)},
+		{"go-sdk", regexp.MustCompile(`go-sdk\x60?\s+(v\d+\.\d+\.\d+)`), req["github.com/bsv-blockchain/go-sdk"]},
+		{"bcommon", regexp.MustCompile(`bcommon\x60?\s+(v\d+\.\d+\.\d+)`), req["github.com/lightwebinc/bcommon"]},
+		{"bstore", regexp.MustCompile(`\bbstore\x60?\s+(v\d+\.\d+\.\d+)`), req["github.com/lightwebinc/bstore"]},
+		{"Go", regexp.MustCompile(`\bGo\s+(1\.\d+)\b`), regexp.MustCompile(`^\d+\.\d+`).FindString(goVer)},
 	}
 	ps := []string{filepath.Join(root, "README.md")}
 	more, _ := filepath.Glob(filepath.Join(root, "docs", "*.md"))

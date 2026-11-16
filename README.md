@@ -75,8 +75,8 @@ $ make bstore-bridge     # bin/bstore-bridge
 $ make docker-build      # the image
 ```
 
-Go 1.27.2. The bridge pins bstore v0.26.1, bcommon v0.33.13 and go-sdk
-v1.7.1, all from the public Go module proxy.
+Go 1.27.2. The bridge pins bstore v0.29.0, bcommon v0.35.1 and go-sdk
+v1.7.5, all from the public Go module proxy.
 
 ## License
 
