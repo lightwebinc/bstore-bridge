@@ -28,10 +28,10 @@ LICENSE-THIRD-PARTY, which is generated from what the binaries actually
 link (scripts/gen-third-party-licenses.py) rather than maintained by
 hand.
 
-go-sdk is under the Apache License 2.0 from v1.7.5, the version the
-bridge builds on. Earlier versions were under the Open BSV License
+go-sdk is under the Apache License 2.0 from v1.7.5; the bridge builds
+on v1.7.8. Versions before v1.7.5 were under the Open BSV License
 Version 5, whose grant was revocable and limited to the BSV Blockchains;
-those terms do not apply to v1.7.5.
+those terms do not apply from v1.7.5.
 
 Section 4(d) of the Apache License asks for more than its text: where a
 module ships a NOTICE file, its attribution notices travel too. Four of
