@@ -34,7 +34,7 @@ What the bridge meets in front of the reference incumbent, ts-stack
 
 - **The handshake.** The incumbent runs the TypeScript SDK's BRC-104
   middleware, which refuses a handshake whose `requestedCertificates`
-  carries Go's field names as malformed. go-sdk v1.7.5, which the bridge
+  carries Go's field names as malformed. go-sdk v1.7.8, which the bridge
   pins, sends the wire shape (`certifiers`, `types`) itself.
 - **An empty JSON body.** The middleware reads a body of `{}` as no body,
   so a signed `{}` fails authentication; the bridge's unpaid first call is
